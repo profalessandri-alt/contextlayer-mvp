@@ -1675,17 +1675,7 @@
     if (btn) go(btn.dataset.nav);
   });
 
-  /* ---------- Selector de perspectiva ---------- */
-  document.querySelector(".perspective").addEventListener("click", (e) => {
-    const btn = e.target.closest(".perspective__btn");
-    if (!btn) return;
-    document.querySelectorAll(".perspective__btn").forEach((b) => b.classList.remove("is-active"));
-    btn.classList.add("is-active");
-    state.perspective = btn.dataset.persp;
-    state.openListingId = null;
-    if (state.perspective === "app") go("thirdApp");
-    else go(state.onboarded ? "pasaporte" : "splash");
-  });
+
 
   /* ---------- Arranque ---------- */
   render();
