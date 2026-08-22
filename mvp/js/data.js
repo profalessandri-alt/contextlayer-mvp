@@ -131,6 +131,8 @@ const CL_DATA = {
       noches: 3,
       precioNoche: 155,
       moneda: "USD",
+      premium: true,
+      puntos: 419,
       estado: "en_curso",
     },
     {
@@ -142,6 +144,8 @@ const CL_DATA = {
       noches: 3,
       precioNoche: 140,
       moneda: "USD",
+      premium: true,
+      puntos: 378,
       estado: "finalizada",
     },
     {
@@ -153,6 +157,8 @@ const CL_DATA = {
       noches: 2,
       precioNoche: 172,
       moneda: "USD",
+      premium: true,
+      puntos: 310,
       estado: "finalizada",
     },
     {
@@ -165,6 +171,8 @@ const CL_DATA = {
       duracion: "4 h",
       precio: 65,
       moneda: "USD",
+      premium: true,
+      puntos: 59,
       estado: "finalizada",
     },
   ],

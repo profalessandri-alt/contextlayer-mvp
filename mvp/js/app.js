@@ -49,6 +49,7 @@
     premium: false,
     premiumPlan: null, // "mes" | "anual"
     points: 0,
+    redemptions: [], // historial de canjes
     onboarded: false,
     // Carga conversacional
     chat: [],
@@ -88,6 +89,7 @@
     state.premium = false;
     state.premiumPlan = null;
     state.points = 0;
+    state.redemptions = [];
     state.narrative = "";
     state.narrativeEdited = false;
     state.guidedComplete = false;
@@ -102,6 +104,7 @@
     state.premium = true;
     state.premiumPlan = "anual";
     state.points = 1250;
+    state.redemptions = [{ titulo: "Late check-out garantizado", costo: 400, fecha: "Hace 1 semana" }];
   }
 
   /* ---- Premium: descuento y puntos ---- */
@@ -376,6 +379,18 @@
       <div class="section-label">Canjeá tus puntos</div>
       ${rewards}
 
+      ${state.redemptions.length
+        ? `<div class="section-label">Canjes realizados</div>
+           <div class="card">${state.redemptions
+             .map(
+               (c) => `<div class="ctx-item">
+                 <div class="grow">${esc(c.titulo)}<div class="log__date">${esc(c.fecha)}</div></div>
+                 <div class="ctx-item__val">-${c.costo.toLocaleString("es")} pts</div>
+               </div>`
+             )
+             .join("")}</div>`
+        : ""}
+
       <div class="btn-stack" style="margin-top:6px">
         <button class="btn btn--danger btn--sm" data-action="cancel-premium">Cancelar suscripción</button>
       </div>
@@ -592,9 +607,12 @@
     const meta = r.esTour
       ? `${esc(r.fechas)} · ${esc(r.duracion || "experiencia")}`
       : `${esc(r.fechas)} · ${r.noches} noche${r.noches === 1 ? "" : "s"}`;
-    const total = r.esTour
-      ? `${money(r.precio, r.moneda)} <span class="muted" style="font-weight:400">p/persona</span>`
-      : money(r.precioNoche * r.noches, r.moneda);
+    const baseTotal = r.esTour ? r.precio : r.precioNoche * r.noches;
+    const finalTotal = r.premium ? Math.round(baseTotal * (1 - PREM.discountPct / 100)) : baseTotal;
+    const suffix = r.esTour ? ' <span class="muted" style="font-weight:400">p/persona</span>' : "";
+    const total = r.premium
+      ? `${money(finalTotal, r.moneda)}${suffix} <span class="muted" style="text-decoration:line-through;font-size:0.75rem;font-weight:400">${money(baseTotal, r.moneda)}</span>`
+      : `${money(finalTotal, r.moneda)}${suffix}`;
     return `
       <div class="card">
         <div class="row row--between">
@@ -1744,6 +1762,7 @@
         if (!rw) break;
         if (state.points < rw.costo) return toast("No te alcanzan los puntos");
         state.points -= rw.costo;
+        state.redemptions.unshift({ titulo: rw.titulo, costo: rw.costo, fecha: "Ahora" });
         toast("Canjeaste: " + rw.titulo);
         go("premium");
         break;
