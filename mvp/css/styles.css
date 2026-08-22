@@ -1,0 +1,818 @@
+/* ============================================================================
+ * ContextLayer · MVP — styles.css (mobile-first)
+ * ==========================================================================*/
+
+:root {
+  --bg: #f5f7fc;
+  --bg-2: #eef1f8;
+  --surface: #ffffff;
+  --surface-2: #eef1f8;
+  --line: #e3e7f1;
+  --txt: #1a1e30;
+  --txt-dim: #565d7c;
+  --txt-mute: #9198b5;
+  --brand: #5566ff;
+  --brand-2: #0fae94;
+  --brand-grad: linear-gradient(135deg, #5566ff 0%, #23c3a4 100%);
+  --danger: #ef4d63;
+  --warn: #d99413;
+  --ok: #0fae94;
+  --radius: 16px;
+  --radius-sm: 11px;
+  --shadow: 0 12px 34px rgba(38, 48, 96, 0.12);
+  --pad: 18px;
+  font-size: 16px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  background: #e7ebf6;
+  color: var(--txt);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100dvh;
+  padding: 16px;
+  gap: 12px;
+  background:
+    radial-gradient(1000px 600px at 20% -10%, rgba(85, 102, 255, 0.14), transparent),
+    radial-gradient(800px 500px at 100% 110%, rgba(35, 195, 164, 0.12), transparent),
+    #e7ebf6;
+}
+
+/* ---------- Marco de teléfono ---------- */
+.device {
+  position: relative;
+  width: 100%;
+  max-width: 400px;
+  height: min(860px, 92dvh);
+  background: var(--bg);
+  border-radius: 34px;
+  box-shadow: var(--shadow), 0 0 0 1px var(--line);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.device__notch {
+  position: absolute;
+  top: 0; left: 50%;
+  transform: translateX(-50%);
+  width: 130px; height: 22px;
+  background: #d7dced;
+  border-radius: 0 0 14px 14px;
+  z-index: 30;
+}
+
+/* ---------- Barra de estado ---------- */
+.statusbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 22px 6px;
+  font-size: 0.72rem;
+  color: var(--txt-dim);
+  letter-spacing: 0.3px;
+}
+.statusbar__brand { font-weight: 700; color: var(--txt); opacity: 0.9; }
+.statusbar__icons { letter-spacing: -1px; opacity: 0.7; }
+
+/* ---------- Contenedor de pantalla ---------- */
+.screen {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--pad) var(--pad) 26px;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+.screen::-webkit-scrollbar { width: 0; }
+.screen:focus { outline: none; }
+
+/* Animación de entrada */
+.fade-in { animation: fade 0.28s ease; }
+@keyframes fade {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ---------- Tipografía / bloques ---------- */
+.eyebrow {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 1.4px;
+  color: var(--brand-2);
+  font-weight: 700;
+}
+h1.title { font-size: 1.6rem; line-height: 1.2; margin: 6px 0 8px; }
+h2.title { font-size: 1.25rem; margin: 4px 0 6px; }
+.lead { color: var(--txt-dim); font-size: 0.95rem; line-height: 1.5; }
+.section-label {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--txt-mute);
+  margin: 18px 2px 8px;
+  font-weight: 700;
+}
+.muted { color: var(--txt-mute); font-size: 0.82rem; }
+
+/* ---------- Screen header (con volver) ---------- */
+.shead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.shead__back {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--txt);
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  font-size: 1.1rem;
+  cursor: pointer;
+  flex: none;
+}
+.shead__title { font-size: 1.15rem; font-weight: 700; }
+
+/* ---------- Cards ---------- */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 12px;
+}
+.card--soft { background: var(--bg-2); }
+.card--brand {
+  background: var(--brand-grad);
+  color: #fff;
+  border: none;
+}
+.card--brand .muted, .card--brand .lead { color: rgba(255,255,255,0.85); }
+
+.row { display: flex; align-items: center; gap: 12px; }
+.row--between { justify-content: space-between; }
+.grow { flex: 1; }
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--txt-dim);
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  margin: 3px 4px 0 0;
+}
+.chip--ok { color: var(--ok); border-color: rgba(87,230,201,0.4); }
+.chip-wrap { display: flex; flex-wrap: wrap; }
+
+.avatar {
+  width: 44px; height: 44px;
+  border-radius: 12px;
+  display: grid; place-items: center;
+  font-size: 1.4rem;
+  background: var(--surface-2);
+  flex: none;
+}
+
+/* ---------- Botones ---------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  border: none;
+  border-radius: 13px;
+  padding: 15px 18px;
+  font-size: 0.98rem;
+  font-weight: 700;
+  cursor: pointer;
+  color: #fff;
+  background: var(--brand-grad);
+  transition: transform 0.08s ease, opacity 0.15s ease;
+}
+.btn:active { transform: scale(0.98); }
+.btn--ghost {
+  background: transparent;
+  color: var(--txt);
+  border: 1px solid var(--line);
+}
+.btn--dark {
+  background: var(--surface-2);
+  color: var(--txt);
+  border: 1px solid var(--line);
+}
+.btn--danger { background: transparent; color: var(--danger); border: 1px solid rgba(255,107,125,0.4); }
+.btn--sm { width: auto; padding: 9px 14px; font-size: 0.82rem; border-radius: 10px; }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn-stack { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+
+/* ---------- Sticky footer de acción ---------- */
+.action-bar {
+  position: sticky;
+  bottom: 0;
+  margin: 16px -18px -26px;
+  padding: 14px 18px calc(18px + env(safe-area-inset-bottom));
+  background: linear-gradient(to top, var(--bg) 70%, transparent);
+}
+
+/* ---------- Form ---------- */
+.field { margin-bottom: 14px; }
+.field__label {
+  display: block;
+  font-size: 0.82rem;
+  color: var(--txt-dim);
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+.field input, .field select, .textarea {
+  width: 100%;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  color: var(--txt);
+  padding: 13px 14px;
+  border-radius: 11px;
+  font-size: 0.95rem;
+  font-family: inherit;
+}
+.field input:focus, .field select:focus, .textarea:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(124,140,255,0.2);
+}
+.textarea { resize: none; min-height: 92px; line-height: 1.5; }
+
+/* ---------- Toggle switch ---------- */
+.switch { position: relative; width: 46px; height: 27px; flex: none; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.switch__track {
+  position: absolute; inset: 0;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  transition: background 0.2s ease;
+}
+.switch__track::after {
+  content: "";
+  position: absolute;
+  top: 3px; left: 3px;
+  width: 19px; height: 19px;
+  border-radius: 50%;
+  background: var(--txt-dim);
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+.switch input:checked + .switch__track { background: rgba(87,230,201,0.25); border-color: var(--brand-2); }
+.switch input:checked + .switch__track::after { transform: translateX(19px); background: var(--brand-2); }
+
+/* ---------- Onboarding progress ---------- */
+.progress { display: flex; gap: 6px; margin-bottom: 18px; }
+.progress__dot {
+  flex: 1; height: 5px; border-radius: 999px; background: var(--surface-2);
+}
+.progress__dot.is-done { background: var(--brand-2); }
+.progress__dot.is-active { background: var(--brand); }
+
+/* ---------- Context category list ---------- */
+.ctx-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 13px 0;
+  border-bottom: 1px solid var(--line);
+}
+.ctx-item:last-child { border-bottom: none; }
+.ctx-item__val { color: var(--txt-dim); font-size: 0.85rem; }
+
+/* ---------- Permission access log ---------- */
+.log {
+  border-left: 2px solid var(--line);
+  margin: 10px 0 2px;
+  padding-left: 12px;
+}
+.log__entry { margin-bottom: 8px; }
+.log__date { font-size: 0.72rem; color: var(--brand-2); font-weight: 700; }
+.log__detail { font-size: 0.82rem; color: var(--txt-dim); }
+
+/* ---------- Option (result) card ---------- */
+.opt__top { display: flex; justify-content: space-between; gap: 10px; }
+.opt__price { text-align: right; flex: none; }
+.opt__price b { font-size: 1.15rem; }
+.match-list { list-style: none; margin: 12px 0 0; }
+.match-list li {
+  display: flex; gap: 8px; align-items: flex-start;
+  font-size: 0.85rem; color: var(--txt-dim);
+  margin-bottom: 7px; line-height: 1.4;
+}
+.match-list li::before { content: "✓"; color: var(--brand-2); font-weight: 700; flex: none; }
+
+.badge-best {
+  background: var(--brand-2); color: #06231c;
+  font-size: 0.66rem; font-weight: 800;
+  padding: 3px 8px; border-radius: 999px;
+  text-transform: uppercase; letter-spacing: 0.6px;
+}
+
+/* ---------- Agent "thinking" ---------- */
+.thinking { text-align: center; padding: 40px 10px; }
+.spinner {
+  width: 46px; height: 46px; margin: 0 auto 18px;
+  border: 3px solid var(--surface-2);
+  border-top-color: var(--brand-2);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.thinking__step { color: var(--txt-dim); font-size: 0.88rem; margin: 6px 0; opacity: 0; }
+.thinking__step.show { opacity: 1; transition: opacity 0.3s ease; }
+
+/* ---------- Success check ---------- */
+.success-mark {
+  width: 84px; height: 84px; margin: 10px auto 20px;
+  border-radius: 50%;
+  background: rgba(87,230,201,0.15);
+  border: 2px solid var(--brand-2);
+  display: grid; place-items: center;
+  font-size: 2.4rem;
+  animation: pop 0.4s ease;
+}
+@keyframes pop { 0% { transform: scale(0.5); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+
+/* ---------- Splash ---------- */
+.splash { height: 100%; display: flex; flex-direction: column; }
+.splash__hero { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+.logo-mark {
+  width: 56px; height: 56px; border-radius: 15px;
+  background: var(--brand-grad);
+  display: grid; place-items: center;
+  color: #fff;
+  font-size: 1.7rem; margin-bottom: 20px;
+}
+.value-row { display: flex; gap: 12px; align-items: flex-start; margin: 14px 0; }
+.value-row__ico {
+  width: 36px; height: 36px; border-radius: 10px; flex: none;
+  background: var(--surface); display: grid; place-items: center; font-size: 1.1rem;
+}
+
+/* ---------- Tabbar ---------- */
+.tabbar {
+  display: flex;
+  border-top: 1px solid var(--line);
+  background: rgba(255,255,255,0.97);
+  backdrop-filter: blur(8px);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.tabbar[hidden] { display: none; }
+.tabbar__btn {
+  flex: 1;
+  background: none; border: none; cursor: pointer;
+  padding: 9px 0 11px;
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  color: var(--txt-mute);
+}
+.tabbar__ico { font-size: 1.2rem; filter: grayscale(1) opacity(0.7); }
+.tabbar__lbl { font-size: 0.66rem; font-weight: 600; }
+.tabbar__btn.is-active { color: var(--brand-2); }
+.tabbar__btn.is-active .tabbar__ico { filter: none; }
+
+/* ---------- Perspective switch (fuera del teléfono) ---------- */
+.perspective {
+  display: flex; align-items: center; gap: 8px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  padding: 7px 10px; border-radius: 999px;
+  font-size: 0.8rem;
+}
+.perspective__lbl { color: var(--txt-mute); }
+.perspective__btn {
+  background: transparent; border: none; cursor: pointer;
+  color: var(--txt-dim); font-weight: 600;
+  padding: 6px 12px; border-radius: 999px; font-size: 0.8rem;
+}
+.perspective__btn.is-active { background: var(--brand-grad); color: #fff; }
+
+/* ---------- Provider inbox ---------- */
+.inbox-item {
+  display: flex; gap: 12px; align-items: flex-start;
+  padding: 14px 0; border-bottom: 1px solid var(--line);
+}
+.inbox-item:last-child { border-bottom: none; }
+.dot-status { width: 9px; height: 9px; border-radius: 50%; flex: none; margin-top: 5px; }
+.dot-status--new { background: var(--brand-2); box-shadow: 0 0 0 4px rgba(87,230,201,0.15); }
+.dot-status--ok { background: var(--txt-mute); }
+
+/* ---------- B2B compare ---------- */
+.b2b-pros { list-style: none; margin-top: 8px; }
+.b2b-pros li { font-size: 0.82rem; color: var(--txt-dim); margin-bottom: 5px; display: flex; gap: 7px; }
+.b2b-pros li.pro::before { content: "＋"; color: var(--ok); font-weight: 800; }
+.b2b-pros li.con::before { content: "－"; color: var(--danger); font-weight: 800; }
+.vote-note {
+  background: rgba(124,140,255,0.12);
+  border: 1px dashed var(--brand);
+  border-radius: 12px; padding: 12px 14px;
+  font-size: 0.82rem; color: var(--txt-dim);
+  margin-top: 6px;
+}
+
+/* ---------- Toast ---------- */
+.toast {
+  position: absolute;
+  left: 50%; bottom: 84px;
+  transform: translateX(-50%) translateY(20px);
+  background: #1a1e30;
+  border: 1px solid #1a1e30;
+  color: #fff;
+  padding: 11px 18px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+  z-index: 50;
+  max-width: 84%;
+  text-align: center;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ---------- Desktop hint ---------- */
+@media (min-width: 760px) {
+  body { flex-direction: column; }
+}
+
+/* ============================================================================
+ * Añadidos v2 — modelo pasaporte (solicitudes, recibos, alcance por campo)
+ * ==========================================================================*/
+
+/* Badge de conteo en el tab de Solicitudes */
+.tabbar__btn { position: relative; }
+.tab-badge {
+  position: absolute;
+  top: 4px;
+  right: calc(50% - 26px);
+  min-width: 17px;
+  height: 17px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 800;
+  display: grid;
+  place-items: center;
+  line-height: 1;
+}
+.tab-badge[hidden] { display: none; }
+
+/* Etiqueta de tipo de solicitante (agente / OTA / comercio) */
+.pill {
+  display: inline-block;
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--brand-2);
+  background: rgba(87, 230, 201, 0.12);
+  border: 1px solid rgba(87, 230, 201, 0.3);
+  padding: 3px 8px;
+  border-radius: 999px;
+}
+.pill--dim {
+  color: var(--txt-mute);
+  background: var(--surface-2);
+  border-color: var(--line);
+}
+
+/* Meta línea propósito / duración */
+.meta-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: 0.82rem;
+  color: var(--txt-dim);
+  margin-top: 8px;
+}
+.meta-row .k { color: var(--txt-mute); min-width: 74px; flex: none; }
+
+/* Fila de campo solicitado con toggle de alcance por campo */
+.field-grant {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--line);
+}
+.field-grant:last-child { border-bottom: none; }
+.field-grant__key {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.72rem;
+  color: var(--brand-2);
+}
+.field-grant__val { color: var(--txt-dim); font-size: 0.85rem; }
+
+/* Bloque de "payload" que se comparte (preview técnico) */
+.codeblock {
+  background: #f2f4fb;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 13px 14px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.76rem;
+  line-height: 1.55;
+  color: #0f8f7c;
+  overflow-x: auto;
+  white-space: pre;
+}
+.codeblock .c-key { color: #4a53c9; }
+.codeblock .c-str { color: #0f8f7c; }
+.codeblock .c-cmt { color: var(--txt-mute); }
+
+/* Recibos (actividad) */
+.receipt {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 13px 0;
+  border-bottom: 1px solid var(--line);
+}
+.receipt:last-child { border-bottom: none; }
+.receipt__ico {
+  width: 34px; height: 34px; border-radius: 9px; flex: none;
+  display: grid; place-items: center; font-size: 1rem;
+  background: var(--surface-2);
+}
+.receipt__tag {
+  font-size: 0.64rem; font-weight: 800; text-transform: uppercase;
+  letter-spacing: 0.5px; padding: 2px 7px; border-radius: 999px;
+}
+.receipt__tag--read { color: #4a53c9; background: rgba(85,102,255,0.12); }
+.receipt__tag--write { color: var(--warn); background: rgba(255,206,107,0.14); }
+
+/* Estado vacío */
+.empty {
+  text-align: center;
+  color: var(--txt-mute);
+  padding: 36px 16px;
+}
+.empty__ico { font-size: 2rem; display: block; margin-bottom: 8px; opacity: 0.7; }
+
+/* ============================================================================
+ * Añadidos v3 — carga conversacional + "Iniciar sesión con ContextLayer"
+ * ==========================================================================*/
+
+/* ---------- Chat de carga de contexto ---------- */
+.chat {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 8px;
+}
+.bubble {
+  max-width: 82%;
+  padding: 11px 14px;
+  border-radius: 16px;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  animation: fade 0.25s ease;
+}
+.bubble--agent {
+  align-self: flex-start;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-bottom-left-radius: 5px;
+}
+.bubble--user {
+  align-self: flex-end;
+  background: var(--brand-grad);
+  color: #fff;
+  border-bottom-right-radius: 5px;
+}
+.bubble__chips { margin-top: 8px; }
+.bubble__chips .chip { background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.25); color: inherit; }
+
+/* Barra de entrada del chat (fija abajo) */
+.chatbar {
+  position: sticky;
+  bottom: 0;
+  margin: 12px -18px -26px;
+  padding: 12px 18px calc(14px + env(safe-area-inset-bottom));
+  background: linear-gradient(to top, var(--bg) 72%, transparent);
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+.chatbar .textarea {
+  flex: 1;
+  min-height: 46px;
+  max-height: 120px;
+  padding: 12px 14px;
+}
+.icon-btn {
+  width: 46px; height: 46px; flex: none;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--txt);
+  font-size: 1.2rem;
+  cursor: pointer;
+  display: grid; place-items: center;
+}
+.icon-btn--send { background: var(--brand-grad); color: #fff; border: none; }
+.mic-btn.is-listening {
+  background: var(--danger);
+  color: #fff;
+  border-color: var(--danger);
+  animation: micpulse 1s ease-in-out infinite;
+}
+@keyframes micpulse { 0%,100% { box-shadow: 0 0 0 0 rgba(255,107,125,0.5);} 50%{ box-shadow: 0 0 0 8px rgba(255,107,125,0);} }
+
+.chat-suggest {
+  display: flex; flex-wrap: wrap; gap: 7px; margin: 4px 0 2px;
+}
+.chat-suggest button {
+  background: var(--surface); border: 1px solid var(--line);
+  color: var(--txt-dim); border-radius: 999px;
+  padding: 7px 12px; font-size: 0.78rem; cursor: pointer;
+}
+
+/* ---------- App de terceros (marco embebido) ---------- */
+.appframe {
+  border-radius: 18px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  margin-bottom: 14px;
+}
+.appframe__bar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 12px;
+  background: #eef1f8;
+  font-size: 0.74rem;
+  color: var(--txt-mute);
+  border-bottom: 1px solid var(--line);
+}
+.appframe__dot { width: 9px; height: 9px; border-radius: 50%; background: #c7cde0; }
+.appframe__url { flex: 1; text-align: center; opacity: 0.8; }
+
+.thirdapp-hero {
+  padding: 26px 18px;
+  text-align: center;
+  color: #fff;
+}
+.thirdapp-logo {
+  width: 58px; height: 58px; border-radius: 16px;
+  display: grid; place-items: center; font-size: 1.9rem;
+  margin: 0 auto 12px;
+  background: rgba(255,255,255,0.15);
+}
+
+/* Botón "Continuar con ContextLayer" */
+.btn-ctxlayer {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  width: 100%;
+  background: #1a1e30;
+  color: #fff;
+  border: 1px solid #1a1e30;
+  border-radius: 13px;
+  padding: 14px 18px;
+  font-weight: 700;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+.btn-ctxlayer__mark {
+  width: 22px; height: 22px; border-radius: 6px;
+  background: var(--brand-grad);
+  display: grid; place-items: center;
+  color: #fff; font-size: 0.85rem;
+}
+.btn-plain {
+  width: 100%; background: #fff; color: var(--txt);
+  border: 1px solid var(--line); border-radius: 13px; padding: 13px;
+  font-weight: 600; font-size: 0.9rem; cursor: pointer; margin-bottom: 10px;
+}
+
+/* ---------- Hoja de consentimiento (SSO handoff) ---------- */
+.sso {
+  padding-top: 6px;
+}
+.sso__head {
+  text-align: center;
+  padding: 10px 0 16px;
+}
+.sso__apps {
+  display: flex; align-items: center; justify-content: center; gap: 14px;
+  margin: 12px 0;
+}
+.sso__badge {
+  width: 52px; height: 52px; border-radius: 14px;
+  display: grid; place-items: center; font-size: 1.6rem;
+  background: var(--surface-2); border: 1px solid var(--line);
+}
+.sso__link { color: var(--brand-2); font-size: 1.4rem; }
+.sso__acct {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--bg-2); border: 1px solid var(--line);
+  border-radius: 12px; padding: 12px; margin-bottom: 12px;
+}
+
+/* ============================================================================
+ * Añadidos v4 — selector de tipo de búsqueda (alojamiento / experiencia)
+ * ==========================================================================*/
+.seg {
+  display: flex;
+  gap: 6px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 4px;
+  margin-bottom: 12px;
+}
+.seg__btn {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--txt-dim);
+  font-weight: 700;
+  font-size: 0.85rem;
+  padding: 9px 8px;
+  border-radius: 9px;
+  cursor: pointer;
+}
+.seg__btn.is-active {
+  background: var(--surface);
+  color: var(--txt);
+  box-shadow: 0 1px 4px rgba(38, 48, 96, 0.12);
+}
+
+/* ============================================================================
+ * Añadidos v5 — edición inline en el resumen del onboarding
+ * ==========================================================================*/
+.sum-edit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+.sum-edit:last-child { border-bottom: none; }
+.sum-edit select,
+.sum-edit input {
+  width: 100%;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  color: var(--txt);
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  font-family: inherit;
+}
+.sum-edit select:focus,
+.sum-edit input:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(85, 102, 255, 0.2);
+}
+.sum-edit .btn { width: auto; flex: none; }
+
+/* ============================================================================
+ * Añadidos v6 — look & feel de marca en el login de apps de terceros
+ * ==========================================================================*/
+.brandhero {
+  padding: 26px 18px;
+  text-align: center;
+}
+.brandhero__wm { line-height: 1; }
+.applogin__sep {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  color: var(--txt-mute);
+  font-size: 0.76rem;
+  margin: 10px 0;
+}
+.applogin__sep::before,
+.applogin__sep::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+.applogin__sep span { padding: 0 10px; }
+
+/* Monograma de marca (insignia con color de la empresa) */
+.brandmark {
+  flex: none;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-weight: 800;
+  line-height: 1;
+}
+.brandcard { align-items: center; }

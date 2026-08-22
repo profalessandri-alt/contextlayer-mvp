@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#0f1226" />
+  <title>ContextLayer · Prototipo</title>
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <link rel="stylesheet" href="css/styles.css?v=19" />
+</head>
+<body>
+  <!-- Marco de teléfono: en desktop se ve como un móvil centrado; en mobile ocupa todo. -->
+  <div class="device" role="application" aria-label="Prototipo ContextLayer">
+    <div class="device__notch" aria-hidden="true"></div>
+
+    <!-- Barra de estado simulada -->
+    <header class="statusbar" aria-hidden="true">
+      <span class="statusbar__time">9:41</span>
+      <span class="statusbar__brand">ContextLayer</span>
+      <span class="statusbar__icons">●●● ⛆ ▮</span>
+    </header>
+
+    <!-- Contenedor donde app.js inyecta cada pantalla -->
+    <main id="screen" class="screen" tabindex="-1"></main>
+
+    <!-- Navegación inferior (se muestra/oculta según la pantalla) -->
+    <nav id="tabbar" class="tabbar" aria-label="Navegación principal" hidden>
+      <button class="tabbar__btn" data-nav="pasaporte">
+        <span class="tabbar__ico">🪪</span><span class="tabbar__lbl">Contexto</span>
+      </button>
+      <button class="tabbar__btn" data-nav="reservas">
+        <span class="tabbar__ico">🛎️</span><span class="tabbar__lbl">Reservas</span>
+      </button>
+      <button class="tabbar__btn" data-nav="actividad">
+        <span class="tabbar__ico">🧾</span><span class="tabbar__lbl">Actividad</span>
+      </button>
+      <button class="tabbar__btn" data-nav="permisos">
+        <span class="tabbar__ico">🔐</span><span class="tabbar__lbl">Permisos</span>
+      </button>
+    </nav>
+  </div>
+
+  <!-- Selector de perspectiva de la demo -->
+  <div class="perspective" aria-label="Cambiar perspectiva de la demo">
+    <span class="perspective__lbl">Vista:</span>
+    <button class="perspective__btn is-active" data-persp="user">Usuario</button>
+    <button class="perspective__btn" data-persp="app">App de terceros</button>
+  </div>
+
+  <script src="js/data.js?v=19"></script>
+  <script src="js/app.js?v=19"></script>
+</body>
+</html>

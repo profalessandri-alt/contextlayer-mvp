@@ -1,0 +1,10 @@
+# OS
+.DS_Store
+
+# Documentación interna del proyecto (NO publicar en GitHub Pages)
+DocsProyecto/
+
+# Temporales
+_*.txt
+_*.py
+_*.html
