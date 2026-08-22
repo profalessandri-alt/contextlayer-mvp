@@ -806,3 +806,13 @@ h2.title { font-size: 1.25rem; margin: 4px 0 6px; }
   line-height: 1;
 }
 .brandcard { align-items: center; }
+
+/* ============================================================================
+ * Añadidos v7 — ContextLayer Premium
+ * ==========================================================================*/
+.card--premium {
+  background: linear-gradient(135deg, #ffd76a 0%, #ffb43d 100%);
+  color: #3a2c00;
+  border: none;
+}
+.card--premium .muted { color: #5c4a12; }

@@ -46,6 +46,9 @@
     searchType: "stay", // "stay" (alojamiento) | "tour" (experiencia)
     selectedOptionId: null,
     reservas: [],
+    premium: false,
+    premiumPlan: null, // "mes" | "anual"
+    points: 0,
     onboarded: false,
     // Carga conversacional
     chat: [],
@@ -82,6 +85,9 @@
     state.grants = [];
     state.receipts = [];
     state.reservas = [];
+    state.premium = false;
+    state.premiumPlan = null;
+    state.points = 0;
     state.narrative = "";
     state.narrativeEdited = false;
     state.guidedComplete = false;
@@ -93,7 +99,17 @@
     state.grants = clone(D.grantsIniciales);
     state.receipts = clone(D.receipts);
     state.reservas = clone(D.reservasBase);
+    state.premium = true;
+    state.premiumPlan = "anual";
+    state.points = 1250;
   }
+
+  /* ---- Premium: descuento y puntos ---- */
+  const PREM = D.premium;
+  const isPremium = () => state.premium;
+  // Precio con descuento premium aplicado (redondeado).
+  const premiumPrice = (v) => (isPremium() ? Math.round(v * (1 - PREM.discountPct / 100)) : v);
+  const pointsFor = (v) => Math.round(v * PREM.pointsPerUsd);
 
   // Guion del onboarding conversacional: campos relevantes, uno por uno.
   const GUIDE = [
@@ -266,6 +282,106 @@
     `);
   };
 
+  /* ---------- ContextLayer Premium ---------- */
+  screens.premium = function () {
+    const memberships = D.connectedApps
+      .map((a) => {
+        const perk = PREM.perks[a.id] || "Beneficios premium";
+        return `
+        <div class="card" style="border-left:4px solid ${(a.brand && a.brand.primary) || a.color}">
+          <div class="row" style="gap:12px">
+            ${brandBadge(a, 40)}
+            <div class="grow"><b>${esc(a.nombre)}</b><div class="muted">${esc(perk)}</div></div>
+            ${isPremium() ? `<span class="chip chip--ok">Activa</span>` : `<span class="chip">Bloqueada</span>`}
+          </div>
+        </div>`;
+      })
+      .join("");
+
+    if (!isPremium()) {
+      const benes = PREM.beneficios
+        .map((b) => `<li>${esc(b)}</li>`)
+        .join("");
+      const ahorro = PREM.price * 12 - PREM.priceYear;
+      return view(`
+        ${sHead("ContextLayer Premium", "pasaporte")}
+        <div class="card card--premium" style="border:none;text-align:center">
+          <div style="font-size:2rem">⭐</div>
+          <div style="font-weight:800;font-size:1.2rem;color:#3a2c00">Hacete Premium</div>
+          <div style="color:#5c4a12;margin-top:2px">Una membresía, todos los proveedores.</div>
+        </div>
+        <ul class="match-list" style="margin:4px 2px 14px">${benes}</ul>
+
+        <div class="section-label">Elegí tu plan</div>
+        <div class="card" role="button" tabindex="0" data-action="subscribe-premium" data-plan="mes">
+          <div class="row row--between">
+            <div><b>Mensual</b><div class="muted">Facturado cada mes</div></div>
+            <div style="text-align:right"><b style="font-size:1.2rem">US$${PREM.price}</b><div class="muted" style="font-size:0.72rem">/mes</div></div>
+          </div>
+        </div>
+        <div class="card" role="button" tabindex="0" data-action="subscribe-premium" data-plan="anual" style="border:2px solid var(--brand-2)">
+          <div class="row row--between">
+            <div><b>Anual</b> <span class="chip chip--ok">Ahorrás US$${ahorro}</span><div class="muted">Facturado una vez al año</div></div>
+            <div style="text-align:right"><b style="font-size:1.2rem">US$${PREM.priceYear}</b><div class="muted" style="font-size:0.72rem">/año</div></div>
+          </div>
+        </div>
+
+        <div class="section-label">Membresías que se activan</div>
+        ${memberships}
+        <div class="action-bar">
+          <button class="btn" data-action="subscribe-premium" data-plan="anual">Suscribirme · US$${PREM.priceYear}/año</button>
+        </div>
+      `);
+    }
+
+    // Premium activo
+    const rewards = PREM.rewards
+      .map((r) => {
+        const canjeable = state.points >= r.costo;
+        return `
+        <div class="card">
+          <div class="row" style="gap:12px">
+            <div class="avatar">${esc(r.icono)}</div>
+            <div class="grow"><b>${esc(r.titulo)}</b><div class="muted">${esc(r.detalle)}</div></div>
+            <div style="text-align:right">
+              <div style="font-weight:800;color:var(--brand-2)">${r.costo.toLocaleString("es")}</div>
+              <div class="muted" style="font-size:0.72rem">puntos</div>
+            </div>
+          </div>
+          <button class="btn btn--sm ${canjeable ? "" : "btn--dark"}" style="margin-top:10px;width:100%" data-action="redeem" data-reward="${r.id}" ${canjeable ? "" : "disabled"}>
+            ${canjeable ? "Canjear" : "Te faltan " + (r.costo - state.points).toLocaleString("es") + " pts"}
+          </button>
+        </div>`;
+      })
+      .join("");
+
+    return view(`
+      ${sHead("ContextLayer Premium", "pasaporte")}
+      <div class="card card--premium" style="border:none">
+        <div class="row row--between">
+          <div>
+            <div style="font-weight:800;color:#3a2c00">⭐ Sos Premium</div>
+            <div style="color:#5c4a12;font-size:0.82rem;margin-top:2px">${state.premiumPlan === "anual" ? "US$" + PREM.priceYear + "/año" : "US$" + PREM.price + "/mes"} · renovación automática</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:1.6rem;font-weight:800;color:#3a2c00">${state.points.toLocaleString("es")}</div>
+            <div style="color:#5c4a12;font-size:0.72rem">puntos</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-label">Tus membresías</div>
+      ${memberships}
+
+      <div class="section-label">Canjeá tus puntos</div>
+      ${rewards}
+
+      <div class="btn-stack" style="margin-top:6px">
+        <button class="btn btn--danger btn--sm" data-action="cancel-premium">Cancelar suscripción</button>
+      </div>
+    `);
+  };
+
   /* ---------- Pasaporte (home) ---------- */
   screens.pasaporte = function () {
     const nombre = fieldValue("identity.name") || "viajera";
@@ -292,6 +408,17 @@
           <div class="avatar">🛎️</div>
           <div class="grow"><b>Mis reservas</b><div class="muted">En curso y finalizadas</div></div>
           <div style="color:var(--txt-mute)">›</div>
+        </div>
+      </div>
+
+      <div class="card ${isPremium() ? "" : "card--premium"}" data-go="premium" role="button" tabindex="0"${isPremium() ? "" : ' style="border:none"'}>
+        <div class="row">
+          <div class="avatar" style="background:${isPremium() ? "var(--surface-2)" : "rgba(255,255,255,.18)"}">⭐</div>
+          <div class="grow">
+            <b${isPremium() ? "" : ' style="color:#3a2c00"'}>ContextLayer Premium</b>
+            <div class="muted"${isPremium() ? "" : ' style="color:#5c4a12"'}>${isPremium() ? state.points.toLocaleString("es") + " puntos · membresías activas" : "US$10/mes o US$100/año · descuentos y puntos"}</div>
+          </div>
+          <div style="color:${isPremium() ? "var(--txt-mute)" : "#3a2c00"}">›</div>
         </div>
       </div>
 
@@ -477,7 +604,7 @@
           </div>
           <span class="chip ${enCurso ? "chip--ok" : ""}">${enCurso ? "En curso" : "Finalizada"}</span>
         </div>
-        <div class="chip-wrap" style="margin-top:8px"><span class="chip pill--dim">${tipoChip}</span></div>
+        <div class="chip-wrap" style="margin-top:8px"><span class="chip pill--dim">${tipoChip}</span>${r.puntos ? `<span class="chip chip--ok">⭐ +${r.puntos} pts</span>` : ""}</div>
         <div class="row row--between" style="margin-top:10px">
           <span class="muted">${meta}</span>
           <b>${total}</b>
@@ -571,9 +698,14 @@
     const sub = o.esTour
       ? `${esc(o.zona)} · ${esc(o.duracion)} · ★ ${o.rating}`
       : `${esc(o.zona)} · ★ ${o.rating}`;
-    const price = o.esTour
-      ? `<b>${money(o.precio, o.moneda)}</b><div class="muted">por persona</div>`
-      : `<b>${money(o.precioNoche, o.moneda)}</b><div class="muted">por noche</div>`;
+    const base = o.esTour ? o.precio : o.precioNoche;
+    const unit = o.esTour ? "por persona" : "por noche";
+    const price = isPremium()
+      ? `<b>${money(premiumPrice(base), o.moneda)}</b><div class="muted" style="text-decoration:line-through;font-size:0.72rem">${money(base, o.moneda)}</div><div class="muted">${unit}</div>`
+      : `<b>${money(base, o.moneda)}</b><div class="muted">${unit}</div>`;
+    const premiumChip = isPremium()
+      ? `<span class="chip chip--ok">⭐ -${PREM.discountPct}% · +${pointsFor(o.esTour ? premiumPrice(o.precio) : premiumPrice(o.precioNoche) * 3)} pts</span>`
+      : "";
     const cta = o.esTour ? "Reservar experiencia en" : "Reservar en";
     return `
       <div class="card">
@@ -586,7 +718,7 @@
           </div>
           <div class="opt__price">${price}</div>
         </div>
-        <div class="chip-wrap" style="margin-top:8px">${source}</div>
+        <div class="chip-wrap" style="margin-top:8px">${source}${premiumChip}</div>
         <ul class="match-list">${matches}</ul>
         <button class="btn btn--sm" style="margin-top:14px;width:100%" data-action="book-in-app" data-opt="${o.id}">
           ${cta} ${esc(app ? app.nombre : "la app")} ›
@@ -682,12 +814,17 @@
         : "";
     }
 
+    const rsv = state.reservas.find((r) => r.optId === (o && o.id));
+    const puntosMsg = rsv && rsv.puntos
+      ? `<div class="card card--premium" style="border:none;text-align:center;margin-bottom:12px">⭐ Ganaste <b>+${rsv.puntos} puntos</b> Premium · saldo ${state.points.toLocaleString("es")} pts</div>`
+      : "";
     return view(`
       <div style="text-align:center;padding-top:20px">
         <div class="success-mark">✓</div>
         <h2 class="title">${esTour ? "Experiencia confirmada" : "Reserva confirmada"}</h2>
         <p class="lead" style="margin-bottom:18px">Reservaste <b>${esc(o.nombre || "")}</b> en ${esc(app ? app.nombre : "la app")}. Como entraste con ContextLayer, ya recibió tu contexto: te reconoce desde el primer momento.</p>
       </div>
+      ${puntosMsg}
       <div class="card card--soft" style="text-align:left">
         <div class="row" style="gap:10px">
           <span>🔐</span>
@@ -1083,12 +1220,18 @@
       const amen = (o.amenities || []).map((x) => `<span class="chip">${esc(x)}</span>`).join("");
       const compartido = a.fields.map((k) => `<span class="chip chip--ok">${esc(fieldLabel(k))}</span>`).join("");
       const sub = esTour ? `${esc(o.zona)} · ${esc(o.duracion)} · ★ ${o.rating}` : `${esc(o.zona)} · ★ ${o.rating}`;
-      const price = esTour
-        ? `<b>${money(o.precio, o.moneda)}</b><div class="muted">por persona</div>`
-        : `<b>${money(o.precioNoche, o.moneda)}</b><div class="muted">por noche</div>`;
-      const totalRow = esTour
-        ? `<span class="muted">Experiencia · ${esc(o.duracion)}</span><b>${money(o.precio, o.moneda)}</b>`
-        : `<span class="muted">3 noches</span><b>${money(o.precioNoche * 3, o.moneda)}</b>`;
+      const unitBase = esTour ? o.precio : o.precioNoche;
+      const price = isPremium()
+        ? `<b>${money(premiumPrice(unitBase), o.moneda)}</b><div class="muted" style="text-decoration:line-through;font-size:0.72rem">${money(unitBase, o.moneda)}</div><div class="muted">${esTour ? "por persona" : "por noche"}</div>`
+        : `<b>${money(unitBase, o.moneda)}</b><div class="muted">${esTour ? "por persona" : "por noche"}</div>`;
+      const totalBase = esTour ? o.precio : o.precioNoche * 3;
+      const totalFinal = premiumPrice(totalBase);
+      const totalRow = isPremium()
+        ? `<span class="muted">${esTour ? "Experiencia" : "3 noches"} · ⭐ premium</span><span style="text-align:right"><b>${money(totalFinal, o.moneda)}</b> <span class="muted" style="text-decoration:line-through;font-size:0.75rem">${money(totalBase, o.moneda)}</span></span>`
+        : `<span class="muted">${esTour ? "Experiencia · " + esc(o.duracion) : "3 noches"}</span><b>${money(totalBase, o.moneda)}</b>`;
+      const pointsRow = isPremium()
+        ? `<div class="row row--between" style="margin-top:6px"><span class="muted">Ganás</span><b style="color:var(--brand-2)">+${pointsFor(totalFinal)} pts</b></div>`
+        : "";
       const bl = a.brand || {};
       const hbl = bl.headerBg || a.color;
       const wml = bl.wordmark || `<span style="color:${bl.headerInk || "#fff"};font-weight:800">${esc(a.nombre)}</span>`;
@@ -1108,6 +1251,7 @@
           ${amen ? `<div class="chip-wrap" style="margin-top:10px">${amen}</div>` : ""}
           <ul class="match-list" style="margin-top:12px">${matches}</ul>
           <div class="row row--between" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line)">${totalRow}</div>
+          ${pointsRow}
         </div>
         <div class="card card--soft">
           <div class="row" style="gap:8px;align-items:flex-start">
@@ -1522,6 +1666,10 @@
             detalle: (o.esTour ? "Experiencia confirmada: " : "Reserva confirmada: ") + o.nombre,
             fields: a.fields,
           });
+          // Puntos premium por esta reserva
+          const totalBase = o.esTour ? o.precio : o.precioNoche * 3;
+          const ganados = isPremium() ? pointsFor(premiumPrice(totalBase)) : 0;
+          if (ganados) state.points += ganados;
           // Registrar en "Mis reservas" como "en curso"
           if (!state.reservas.some((r) => r.optId === o.id)) {
             state.reservas.unshift(
@@ -1537,6 +1685,8 @@
                     duracion: o.duracion,
                     precio: o.precio,
                     moneda: o.moneda,
+                    premium: isPremium(),
+                    puntos: ganados,
                     estado: "en_curso",
                   }
                 : {
@@ -1549,6 +1699,8 @@
                     noches: 3,
                     precioNoche: o.precioNoche,
                     moneda: o.moneda,
+                    premium: isPremium(),
+                    puntos: ganados,
                     estado: "en_curso",
                   }
             );
@@ -1573,6 +1725,29 @@
         setPerspectiveButtons("user");
         go("pasaporte");
         break;
+
+      /* ---- Premium ---- */
+      case "subscribe-premium":
+        state.premium = true;
+        state.premiumPlan = el.dataset.plan === "mes" ? "mes" : "anual";
+        state.points += 200; // puntos de bienvenida
+        toast("¡Bienvenido a Premium! +200 pts de regalo");
+        go("premium");
+        break;
+      case "cancel-premium":
+        state.premium = false;
+        toast("Suscripción cancelada");
+        go("pasaporte");
+        break;
+      case "redeem": {
+        const rw = PREM.rewards.find((x) => x.id === el.dataset.reward);
+        if (!rw) break;
+        if (state.points < rw.costo) return toast("No te alcanzan los puntos");
+        state.points -= rw.costo;
+        toast("Canjeaste: " + rw.titulo);
+        go("premium");
+        break;
+      }
 
     }
   }

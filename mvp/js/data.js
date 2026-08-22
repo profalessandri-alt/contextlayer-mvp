@@ -466,6 +466,38 @@ const CL_DATA = {
       },
     },
   ],
+
+  /* ------------------------------------------------------------------------
+   * CONTEXTLAYER PREMIUM (US$10/mes): membresía premium en los proveedores
+   * conectados, con descuentos y puntos canjeables.
+   * ----------------------------------------------------------------------*/
+  premium: {
+    price: 10, // por mes
+    priceYear: 100, // por año (ahorro vs. 12 meses)
+    moneda: "USD",
+    discountPct: 10, // % de descuento en reservas
+    pointsPerUsd: 1, // puntos acumulados por dólar gastado
+    beneficios: [
+      "Membresía premium en todos los proveedores conectados",
+      "10% de descuento en alojamientos y experiencias",
+      "Acumulás puntos en cada reserva",
+      "Canjeás puntos por descuentos y beneficios",
+    ],
+    // Beneficio destacado por proveedor (se muestra en la membresía).
+    perks: {
+      "app-airbnb": "10% off + check-in flexible",
+      "app-booking": "10% off + nivel Genius 3",
+      "app-civitatis": "10% off + reserva prioritaria",
+      "app-terruno": "10% off + cata de bienvenida",
+    },
+    // Catálogo de canje de puntos.
+    rewards: [
+      { id: "rw-desc", titulo: "US$15 de descuento", detalle: "En tu próxima reserva", costo: 800, icono: "💸" },
+      { id: "rw-checkout", titulo: "Late check-out garantizado", detalle: "Salí hasta las 15 h", costo: 400, icono: "🕒" },
+      { id: "rw-upgrade", titulo: "Upgrade de habitación", detalle: "Sujeto a disponibilidad", costo: 1200, icono: "⬆️" },
+      { id: "rw-exp", titulo: "Experiencia gratis (hasta US$50)", detalle: "Elegí un tour", costo: 2500, icono: "🎁" },
+    ],
+  },
 };
 
 window.CL_DATA = CL_DATA;
