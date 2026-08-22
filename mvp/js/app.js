@@ -47,7 +47,8 @@
     selectedOptionId: null,
     reservas: [],
     premium: false,
-    premiumPlan: null, // "mes" | "anual"
+    premiumPlan: null, // "mes" | "anual" (plan contratado)
+    selectedPlan: "anual", // plan elegido en la pantalla (antes de suscribir)
     points: 0,
     redemptions: [], // historial de canjes
     onboarded: false,
@@ -88,6 +89,7 @@
     state.reservas = [];
     state.premium = false;
     state.premiumPlan = null;
+    state.selectedPlan = "anual";
     state.points = 0;
     state.redemptions = [];
     state.narrative = "";
@@ -306,6 +308,10 @@
         .map((b) => `<li>${esc(b)}</li>`)
         .join("");
       const ahorro = PREM.price * 12 - PREM.priceYear;
+      const sel = state.selectedPlan || "anual";
+      const selMes = sel === "mes";
+      const dot = (on) => `<span class="radio ${on ? "radio--on" : ""}"></span>`;
+      const btnPrecio = selMes ? `US$${PREM.price}/mes` : `US$${PREM.priceYear}/año`;
       return view(`
         ${sHead("ContextLayer Premium", "pasaporte")}
         <div class="card card--premium" style="border:none;text-align:center">
@@ -316,15 +322,17 @@
         <ul class="match-list" style="margin:4px 2px 14px">${benes}</ul>
 
         <div class="section-label">Elegí tu plan</div>
-        <div class="card" role="button" tabindex="0" data-action="subscribe-premium" data-plan="mes">
-          <div class="row row--between">
-            <div><b>Mensual</b><div class="muted">Facturado cada mes</div></div>
+        <div class="card plan-card ${selMes ? "plan-card--on" : ""}" role="button" tabindex="0" data-action="select-plan" data-plan="mes">
+          <div class="row" style="gap:12px">
+            ${dot(selMes)}
+            <div class="grow"><b>Mensual</b><div class="muted">Facturado cada mes</div></div>
             <div style="text-align:right"><b style="font-size:1.2rem">US$${PREM.price}</b><div class="muted" style="font-size:0.72rem">/mes</div></div>
           </div>
         </div>
-        <div class="card" role="button" tabindex="0" data-action="subscribe-premium" data-plan="anual" style="border:2px solid var(--brand-2)">
-          <div class="row row--between">
-            <div><b>Anual</b> <span class="chip chip--ok">Ahorrás US$${ahorro}</span><div class="muted">Facturado una vez al año</div></div>
+        <div class="card plan-card ${!selMes ? "plan-card--on" : ""}" role="button" tabindex="0" data-action="select-plan" data-plan="anual">
+          <div class="row" style="gap:12px">
+            ${dot(!selMes)}
+            <div class="grow"><b>Anual</b> <span class="chip chip--ok">Ahorrás US$${ahorro}</span><div class="muted">Facturado una vez al año</div></div>
             <div style="text-align:right"><b style="font-size:1.2rem">US$${PREM.priceYear}</b><div class="muted" style="font-size:0.72rem">/año</div></div>
           </div>
         </div>
@@ -332,7 +340,7 @@
         <div class="section-label">Membresías que se activan</div>
         ${memberships}
         <div class="action-bar">
-          <button class="btn" data-action="subscribe-premium" data-plan="anual">Suscribirme · US$${PREM.priceYear}/año</button>
+          <button class="btn" data-action="subscribe-premium">Suscribirme · ${btnPrecio}</button>
         </div>
       `);
     }
@@ -1745,9 +1753,13 @@
         break;
 
       /* ---- Premium ---- */
+      case "select-plan":
+        state.selectedPlan = el.dataset.plan === "mes" ? "mes" : "anual";
+        go("premium");
+        break;
       case "subscribe-premium":
         state.premium = true;
-        state.premiumPlan = el.dataset.plan === "mes" ? "mes" : "anual";
+        state.premiumPlan = state.selectedPlan || "anual";
         state.points += 200; // puntos de bienvenida
         toast("¡Bienvenido a Premium! +200 pts de regalo");
         go("premium");

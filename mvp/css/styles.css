@@ -816,3 +816,21 @@ h2.title { font-size: 1.25rem; margin: 4px 0 6px; }
   border: none;
 }
 .card--premium .muted { color: #5c4a12; }
+
+/* Selección de plan Premium */
+.plan-card { cursor: pointer; transition: border-color 0.15s ease; }
+.plan-card--on { border: 2px solid var(--brand-2); }
+.radio {
+  width: 20px; height: 20px; flex: none;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+  display: inline-block;
+  position: relative;
+}
+.radio--on { border-color: var(--brand-2); }
+.radio--on::after {
+  content: "";
+  position: absolute; inset: 3px;
+  border-radius: 50%;
+  background: var(--brand-2);
+}
