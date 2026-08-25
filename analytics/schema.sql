@@ -68,11 +68,12 @@ create table if not exists public.feedback (
 );
 
 -- Los admins autorizados a LEER (solo emails; los usuarios se crean a mano en
--- Authentication → Add user). ⚠️ REEMPLAZAR por los emails reales de los dos.
+-- Authentication → Add user). ⚠️ REEMPLAZAR por los emails reales de los dos
+-- ANTES de ejecutar (no commitear emails reales: este archivo es público).
 create table if not exists public.admins (email text primary key);
 insert into public.admins (email) values
-  ('alessandri.fr@gmail.com'),
-  ('EMAIL-DE-EFRAIN@ejemplo.com')
+  ('ADMIN-1@ejemplo.com'),
+  ('ADMIN-2@ejemplo.com')
   on conflict do nothing;
 
 -- ---------------------------------------------------------------- RLS ------
