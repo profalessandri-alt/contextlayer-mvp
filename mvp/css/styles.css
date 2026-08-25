@@ -768,3 +768,201 @@ body.preview-mode {
 .preview-mode .screen {
   overflow: visible;
 }
+
+/* ============================================================================
+ * v2 — Transiciones direccionales entre pantallas
+ * El render conserva la pantalla saliente como "fantasma" superpuesto y
+ * anima ambas. Direcciones: fwd (push), back (pop), tabs, fade y sheet (SSO).
+ * ==========================================================================*/
+.screen.is-anim { position: relative; overflow: hidden; }
+.screen__ghost {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 1;
+  background: var(--bg);
+  padding: var(--pad) var(--pad) 26px;
+}
+.screen__ghost--top { z-index: 3; }
+.screen.is-anim > .s-new { position: relative; z-index: 2; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .s-in-fwd  { animation: sInFwd 0.28s cubic-bezier(0.32, 0.72, 0.24, 1) both; }
+  .s-out-fwd { animation: sOutFwd 0.28s cubic-bezier(0.32, 0.72, 0.24, 1) both; }
+  .s-in-back  { animation: sInBack 0.28s cubic-bezier(0.32, 0.72, 0.24, 1) both; }
+  .s-out-back { animation: sOutBack 0.28s cubic-bezier(0.32, 0.72, 0.24, 1) both; }
+  .s-in-tabf { animation: sInTabF 0.2s ease both; }
+  .s-in-tabb { animation: sInTabB 0.2s ease both; }
+  .s-out-tabf, .s-out-tabb { animation: sOutTab 0.2s ease both; }
+  .s-in-fade { animation: fade 0.15s ease both; }
+  .s-out-fade { animation: sOutFade 0.15s ease both; }
+  .s-in-up { animation: sInUp 0.32s cubic-bezier(0.32, 0.72, 0.24, 1) both; }
+  .s-out-hold { animation: sHold 0.32s linear both; }
+  .s-in-hold { animation: fade 0.2s ease both; }
+  .s-out-down { animation: sOutDown 0.26s cubic-bezier(0.5, 0, 0.75, 0.4) both; }
+}
+@keyframes sInFwd  { from { transform: translateX(100%); } to { transform: translateX(0); } }
+@keyframes sOutFwd { from { transform: translateX(0); opacity: 1; } to { transform: translateX(-28%); opacity: 0.55; } }
+@keyframes sInBack  { from { transform: translateX(-28%); opacity: 0.55; } to { transform: translateX(0); opacity: 1; } }
+@keyframes sOutBack { from { transform: translateX(0); } to { transform: translateX(100%); } }
+@keyframes sInTabF { from { transform: translateX(16px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes sInTabB { from { transform: translateX(-16px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes sOutTab { from { opacity: 1; } to { opacity: 0; } }
+@keyframes sOutFade { from { opacity: 1; } to { opacity: 0; } }
+@keyframes sInUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes sHold { from { opacity: 1; } to { opacity: 0.6; } }
+@keyframes sOutDown { from { transform: translateY(0); } to { transform: translateY(100%); } }
+
+/* Entrada en cascada de cards al montar una pantalla */
+@media (prefers-reduced-motion: no-preference) {
+  .stagger .card, .stagger .value-row, .stagger .receipt {
+    animation: rise 0.38s ease backwards;
+    animation-delay: calc(var(--i, 0) * 45ms);
+  }
+}
+@keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+/* ============================================================================
+ * v2 — Thinking de Aria: pasos con check animado + esqueleto de resultados
+ * ==========================================================================*/
+.thinking__list { max-width: 300px; margin: 18px auto 0; text-align: left; }
+.tstep {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 0;
+  color: var(--txt-mute);
+  font-size: 0.88rem;
+  transition: color 0.25s ease;
+}
+.tstep__ico { width: 22px; height: 22px; flex: none; position: relative; }
+.tstep__spin {
+  position: absolute; inset: 2px;
+  border: 2px solid var(--surface-2);
+  border-top-color: var(--brand-2);
+  border-radius: 50%;
+  opacity: 0;
+  animation: spin 0.8s linear infinite;
+}
+.tstep.is-active { color: var(--txt-dim); }
+.tstep.is-active .tstep__spin { opacity: 1; }
+.tstep__check { position: absolute; inset: 0; width: 22px; height: 22px; }
+.tstep__check path {
+  fill: none;
+  stroke: var(--brand-2);
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 26;
+  stroke-dashoffset: 26;
+}
+.tstep.is-done { color: var(--txt-dim); }
+.tstep.is-done .tstep__spin { opacity: 0; animation: none; }
+.tstep.is-done .tstep__check path { transition: stroke-dashoffset 0.3s ease; stroke-dashoffset: 0; }
+
+/* Esqueletos (shimmer) */
+.skel {
+  background: linear-gradient(90deg, var(--surface-2) 25%, #e6eaf5 45%, var(--surface-2) 65%);
+  background-size: 200% 100%;
+  border-radius: 8px;
+  animation: shimmer 1.3s ease infinite;
+}
+@keyframes shimmer { from { background-position: 180% 0; } to { background-position: -20% 0; } }
+.skel--title { height: 16px; width: 62%; margin-bottom: 10px; }
+.skel--line { height: 11px; width: 88%; margin-bottom: 7px; }
+.skel--line.short { width: 45%; }
+.skel-cards { margin-top: 22px; opacity: 0; transition: opacity 0.3s ease; }
+.skel-cards.show { opacity: 1; }
+.skel-cards .card { text-align: left; }
+@media (prefers-reduced-motion: reduce) { .skel { animation: none; } }
+
+/* ============================================================================
+ * v2 — Anillo de match % en los resultados
+ * ==========================================================================*/
+.matchring { position: relative; width: 44px; height: 44px; flex: none; }
+.matchring svg { width: 44px; height: 44px; transform: rotate(-90deg); }
+.matchring circle { fill: none; stroke-width: 4; }
+.matchring__bg { stroke: var(--surface-2); }
+.matchring__val {
+  stroke: url(#ringgrad);
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.matchring__num {
+  position: absolute; inset: 0;
+  display: grid; place-items: center;
+  font-size: 0.68rem; font-weight: 800;
+  color: var(--brand-2);
+}
+
+/* ============================================================================
+ * v2 — Bottom sheet (confirmaciones y feedback)
+ * ==========================================================================*/
+.sheet { position: absolute; inset: 0; z-index: 60; }
+.sheet__backdrop {
+  position: absolute; inset: 0;
+  background: rgba(15, 18, 38, 0.45);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+.sheet__panel {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  background: var(--surface);
+  border-radius: 22px 22px 0 0;
+  padding: 10px 18px calc(20px + env(safe-area-inset-bottom));
+  transform: translateY(100%);
+  transition: transform 0.3s cubic-bezier(0.32, 0.72, 0.24, 1);
+  box-shadow: 0 -12px 40px rgba(38, 48, 96, 0.25);
+  max-height: 82%;
+  overflow-y: auto;
+}
+.sheet.is-open .sheet__backdrop { opacity: 1; }
+.sheet.is-open .sheet__panel { transform: translateY(0); }
+.sheet__grip {
+  width: 40px; height: 4px;
+  border-radius: 999px;
+  background: var(--line);
+  margin: 4px auto 14px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sheet__backdrop, .sheet__panel { transition: none; }
+}
+
+/* Confetti al confirmar */
+.confetti {
+  position: absolute; inset: 0;
+  pointer-events: none;
+  z-index: 70;
+}
+
+/* ============================================================================
+ * v2 — Chat: typing indicator y entrada
+ * ==========================================================================*/
+.bubble--typing { display: inline-flex; gap: 4px; align-items: center; min-width: 52px; min-height: 20px; }
+.bubble--typing span {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--txt-mute);
+  animation: typing 1.1s ease infinite;
+}
+.bubble--typing span:nth-child(2) { animation-delay: 0.15s; }
+.bubble--typing span:nth-child(3) { animation-delay: 0.3s; }
+@keyframes typing { 0%, 60%, 100% { transform: none; opacity: 0.5; } 30% { transform: translateY(-4px); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .bubble--typing span { animation: none; } }
+
+/* ============================================================================
+ * v2 — Validación y detalles de interacción
+ * ==========================================================================*/
+.field--error input, .field--error select { border-color: var(--danger); box-shadow: 0 0 0 3px rgba(239, 77, 99, 0.15); }
+.field__msg { color: var(--danger); font-size: 0.75rem; margin-top: 5px; }
+
+.card[role="button"], .chat-suggest button, .tabbar__btn, .plan-card, .brandcard {
+  transition: transform 0.12s ease;
+}
+.card[role="button"]:active, .chat-suggest button:active, .plan-card:active, .brandcard:active { transform: scale(0.98); }
+
+:focus-visible { outline: 3px solid rgba(85, 102, 255, 0.55); outline-offset: 2px; border-radius: 6px; }
+.btn:focus-visible, .card[role="button"]:focus-visible { outline-offset: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .matchring__val { transition: none; }
+}

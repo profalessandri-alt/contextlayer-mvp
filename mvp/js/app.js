@@ -30,12 +30,110 @@
     if (!t) {
       t = document.createElement("div");
       t.className = "toast";
+      t.setAttribute("role", "status");
+      t.setAttribute("aria-live", "polite");
       document.querySelector(".device").appendChild(t);
     }
     t.textContent = msg;
     t.classList.add("show");
     clearTimeout(t._timer);
     t._timer = setTimeout(() => t.classList.remove("show"), 2200);
+  }
+
+  // Vibración sutil donde el dispositivo lo soporte (confirmaciones).
+  const buzz = (ms) => { try { navigator.vibrate && navigator.vibrate(ms || 12); } catch (e) {} };
+
+  /* ---- Bottom sheet genérica (confirmaciones, feedback) ---- */
+  function openSheet(html) {
+    closeSheet(true);
+    const wrap = document.createElement("div");
+    wrap.className = "sheet";
+    wrap.innerHTML = `
+      <div class="sheet__backdrop"></div>
+      <div class="sheet__panel" role="dialog" aria-modal="true">
+        <div class="sheet__grip"></div>
+        ${html}
+      </div>`;
+    document.querySelector(".device").appendChild(wrap);
+    requestAnimationFrame(() => wrap.classList.add("is-open"));
+    const onKey = (e) => { if (e.key === "Escape") closeSheet(); };
+    document.addEventListener("keydown", onKey);
+    wrap._cleanup = () => document.removeEventListener("keydown", onKey);
+    wrap.querySelector(".sheet__backdrop").addEventListener("click", () => closeSheet());
+    wrap.addEventListener("click", (e) => {
+      const actEl = e.target.closest("[data-action]");
+      if (actEl) handleAction(actEl.dataset.action, actEl);
+    });
+    return wrap;
+  }
+  function closeSheet(instant) {
+    const s = document.querySelector(".sheet");
+    if (!s) return;
+    if (s._cleanup) s._cleanup();
+    if (instant || reducedMotion()) return s.remove();
+    s.classList.remove("is-open");
+    setTimeout(() => s.remove(), 280);
+  }
+
+  /* ---- Confetti (canvas propio, 1.2 s) ---- */
+  function confetti() {
+    if (reducedMotion()) return;
+    const device = document.querySelector(".device");
+    const c = document.createElement("canvas");
+    c.className = "confetti";
+    c.width = device.clientWidth;
+    c.height = device.clientHeight;
+    device.appendChild(c);
+    const ctx = c.getContext("2d");
+    const colores = ["#5566ff", "#23c3a4", "#ffd76a", "#ef4d63", "#a48fff"];
+    const parts = [];
+    for (let i = 0; i < 46; i++) {
+      parts.push({
+        x: c.width / 2 + (Math.random() - 0.5) * 90,
+        y: c.height * 0.32,
+        vx: (Math.random() - 0.5) * 7,
+        vy: -4 - Math.random() * 6,
+        s: 4 + Math.random() * 5,
+        r: Math.random() * Math.PI,
+        vr: (Math.random() - 0.5) * 0.3,
+        col: colores[i % colores.length],
+      });
+    }
+    const t0 = performance.now();
+    (function tick(now) {
+      const dt = now - t0;
+      ctx.clearRect(0, 0, c.width, c.height);
+      parts.forEach((p) => {
+        p.x += p.vx; p.y += p.vy; p.vy += 0.22; p.r += p.vr;
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.r);
+        ctx.globalAlpha = Math.max(0, 1 - dt / 1200);
+        ctx.fillStyle = p.col;
+        ctx.fillRect(-p.s / 2, -p.s / 2, p.s, p.s * 0.6);
+        ctx.restore();
+      });
+      if (dt < 1200) requestAnimationFrame(tick);
+      else c.remove();
+    })(t0);
+  }
+
+  /* ---- Contador animado (puntos premium) ---- */
+  function animateCounts(root) {
+    if (reducedMotion()) return;
+    root.querySelectorAll("[data-count]").forEach((el) => {
+      const to = Number(el.dataset.count);
+      const from = Number(el.dataset.from);
+      if (isNaN(to) || isNaN(from) || from === to) return;
+      const t0 = performance.now();
+      const dur = 650;
+      (function tick(now) {
+        const k = Math.min(1, (now - t0) / dur);
+        const e = 1 - Math.pow(1 - k, 3); // easeOutCubic
+        el.textContent = Math.round(from + (to - from) * e).toLocaleString("es");
+        if (k < 1) requestAnimationFrame(tick);
+      })(t0);
+    });
   }
 
   /* -------------------------------------------------------------- Estado */
@@ -75,6 +173,48 @@
   // Busca una oferta por id, sea alojamiento (opciones) o experiencia (tours).
   const findOffer = (id) =>
     D.opciones.find((o) => o.id === id) || D.tours.find((o) => o.id === id) || null;
+
+  /* ---- Validación inline de los pasos del formulario ---- */
+  function validateDom(dom) {
+    if (!dom) return null;
+    for (const f of dom.campos) {
+      if (f.key === "identity.name" && String(f.valor || "").trim() === "") {
+        return { key: f.key, msg: "Contanos tu nombre para personalizar la experiencia." };
+      }
+      if (f.key === "stay.budget.max") {
+        const n = Number(f.valor);
+        if (f.valor === "" || isNaN(n) || n < 10 || n > 100000) {
+          return { key: f.key, msg: "Ingresá tu presupuesto por noche (entre 10 y 100.000)." };
+        }
+      } else if (f.tipo === "number" && f.valor !== "" && f.valor != null) {
+        const n = Number(f.valor);
+        if (isNaN(n) || n <= 0 || n > 100000) return { key: f.key, msg: "Ingresá un número válido." };
+      }
+    }
+    return null;
+  }
+
+  function markFieldError(key, msg) {
+    const input = screenEl.querySelector('[data-key="' + key + '"]');
+    if (!input) return toast(msg);
+    const field = input.closest(".field");
+    if (field) {
+      field.classList.add("field--error");
+      let m = field.querySelector(".field__msg");
+      if (!m) {
+        m = document.createElement("div");
+        m.className = "field__msg";
+        field.appendChild(m);
+      }
+      m.textContent = msg;
+      input.addEventListener("input", () => {
+        field.classList.remove("field--error");
+        const mm = field.querySelector(".field__msg");
+        if (mm) mm.remove();
+      }, { once: true });
+    }
+    input.focus();
+  }
 
   // Al armar por formulario, los select vacíos toman su primera opción por
   // defecto (se aplica al entrar a cada paso, nunca durante el render).
@@ -170,6 +310,8 @@
     try {
       const s = {};
       PERSIST_KEYS.forEach((k) => (s[k] = state[k]));
+      // Las burbujas de "escribiendo…" son efímeras: no se persisten.
+      if (Array.isArray(s.chat)) s.chat = s.chat.filter((m) => !m.typing);
       localStorage.setItem(STORE_KEY, JSON.stringify({ v: 1, t: Date.now(), s }));
     } catch (e) { /* quota o storage bloqueado: seguimos en memoria */ }
   }
@@ -213,6 +355,9 @@
     const A = NAV[a] || { lvl: 1 };
     const B = NAV[b] || { lvl: 1 };
     if (a === b) return "none";
+    // La hoja de consentimiento SSO entra/sale como bottom sheet.
+    if (b === "sso") return "sheet";
+    if (a === "sso") return "unsheet";
     if (A.tab != null && B.tab != null) return B.tab > A.tab ? "tab-fwd" : "tab-back";
     if (B.lvl > A.lvl) return "fwd";
     if (B.lvl < A.lvl) return "back";
@@ -280,6 +425,7 @@
 
     state._navDir = mismo ? "none" : dirBetween(desde, screen);
     state.screen = screen;
+    if (!mismo) closeSheet(true);
 
     // Misma pantalla con otro parámetro (ej. volver al selector de apps):
     // actualizar la ruta in place, sin apilar historia.
@@ -340,12 +486,87 @@
     </div>`;
   }
 
+  /* ---- Transiciones: la pantalla saliente queda como "fantasma" ---- */
+  const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // Sufijos de animación por dirección; `top` decide quién queda arriba
+  // (la pantalla entrante o el fantasma saliente).
+  const ANIM = {
+    "fwd":      { in: "fwd",  out: "fwd",  top: "in" },
+    "back":     { in: "back", out: "back", top: "out" },
+    "tab-fwd":  { in: "tabf", out: "tabf", top: "in" },
+    "tab-back": { in: "tabb", out: "tabb", top: "in" },
+    "fade":     { in: "fade", out: "fade", top: "in" },
+    "sheet":    { in: "up",   out: "hold", top: "in" },
+    "unsheet":  { in: "hold", out: "down", top: "out" },
+  };
+
+  let ghostTimer = null;
+  function finishGhost() {
+    clearTimeout(ghostTimer);
+    const g = screenEl.querySelector(".screen__ghost");
+    if (g) g.remove();
+    screenEl.classList.remove("is-anim");
+    const n = screenEl.firstElementChild;
+    if (n) {
+      Array.prototype.slice.call(n.classList).forEach((c) => {
+        if (c.indexOf("s-in-") === 0 || c === "s-new") n.classList.remove(c);
+      });
+    }
+  }
+
+  let firstRender = true;
+
   function render() {
     const fn = screens[state.screen] || screens.splash;
-    screenEl.innerHTML = "";
+    const dir = state._navDir || "none";
+    state._navDir = "none";
+    const spec = !state._preview && !reducedMotion() ? ANIM[dir] : null;
+
+    finishGhost(); // si había una transición en curso, cerrarla ya
+    const saliente = screenEl.firstElementChild;
+    const scrollPrev = screenEl.scrollTop;
+
     const node = fn();
-    node.classList.add("fade-in");
-    screenEl.appendChild(node);
+
+    if (spec && saliente) {
+      const ghost = document.createElement("div");
+      ghost.className = "screen__ghost s-out-" + spec.out + (spec.top === "out" ? " screen__ghost--top" : "");
+      // Compensar el scroll: el fantasma muestra exactamente lo que se veía.
+      saliente.style.transform = "translateY(" + -scrollPrev + "px)";
+      ghost.appendChild(saliente);
+      node.classList.add("s-new", "s-in-" + spec.in);
+      screenEl.innerHTML = "";
+      screenEl.classList.add("is-anim");
+      screenEl.appendChild(node);
+      screenEl.appendChild(ghost);
+      node.addEventListener("animationend", finishGhost, { once: true });
+      ghostTimer = setTimeout(finishGhost, 450); // red de seguridad
+    } else {
+      screenEl.innerHTML = "";
+      if (!state._preview) node.classList.add("fade-in");
+      screenEl.appendChild(node);
+    }
+
+    // Cascada de cards cuando la pantalla no llega deslizándose entera.
+    if (!state._preview && !reducedMotion() && state.screen !== "chatload" &&
+        (firstRender || dir === "none" || dir === "fade" || dir.indexOf("tab") === 0)) {
+      let i = 0;
+      node.querySelectorAll(".card, .value-row, .receipt").forEach((el) => {
+        if (i < 8) el.style.setProperty("--i", i++);
+      });
+      node.classList.add("stagger");
+    }
+    firstRender = false;
+    animateCounts(node);
+
+    // Anillos de match: animar el arco al montarse.
+    node.querySelectorAll("[data-ring]").forEach((el) => {
+      if (reducedMotion()) el.style.strokeDashoffset = el.dataset.ring;
+      else requestAnimationFrame(() => requestAnimationFrame(() => {
+        el.style.strokeDashoffset = el.dataset.ring;
+      }));
+    });
 
     const showTabs = state.perspective === "user" && USER_TABS.includes(state.screen);
     tabbar.hidden = !showTabs;
@@ -517,6 +738,8 @@
     }
 
     // Premium activo
+    const ptsFrom = state._ptsFrom != null ? state._ptsFrom : state.points;
+    state._ptsFrom = null;
     const rewards = PREM.rewards
       .map((r) => {
         const canjeable = state.points >= r.costo;
@@ -546,7 +769,7 @@
             <div style="color:#5c4a12;font-size:0.82rem;margin-top:2px">${state.premiumPlan === "anual" ? "US$" + PREM.priceYear + "/año" : "US$" + PREM.price + "/mes"} · renovación automática</div>
           </div>
           <div style="text-align:right">
-            <div style="font-size:1.6rem;font-weight:800;color:#3a2c00">${state.points.toLocaleString("es")}</div>
+            <div style="font-size:1.6rem;font-weight:800;color:#3a2c00" data-count="${state.points}" data-from="${ptsFrom}">${state.points.toLocaleString("es")}</div>
             <div style="color:#5c4a12;font-size:0.72rem">puntos</div>
           </div>
         </div>
@@ -764,7 +987,7 @@
           </div>
           ${
             g.activo
-              ? `<button class="btn btn--danger btn--sm" style="margin-top:12px" data-action="toggle-grant" data-grant="${g.id}">Revocar acceso</button>`
+              ? `<button class="btn btn--danger btn--sm" style="margin-top:12px" data-action="ask-revoke" data-grant="${g.id}">Revocar acceso</button>`
               : ""
           }
         </div>`;
@@ -862,44 +1085,98 @@
   };
 
   screens.thinking = function () {
+    const isTour = state.searchType === "tour";
     const steps = [
       "Leyendo tu contexto autorizado…",
       "Consultando tus apps conectadas…",
-      "Filtrando por tus gustos y presupuesto…",
+      isTour ? "Filtrando por tus actividades y presupuesto…" : "Filtrando por tus gustos y presupuesto…",
       "Ordenando el mejor match para vos…",
     ];
+    const skelCard = `
+      <div class="card">
+        <div class="skel skel--title"></div>
+        <div class="skel skel--line"></div>
+        <div class="skel skel--line short"></div>
+      </div>`;
     const node = view(`
       <div class="thinking">
         <div class="spinner"></div>
         <b>Aria está trabajando</b>
-        <div id="steps" style="margin-top:14px">
-          ${steps.map((s) => `<div class="thinking__step">${esc(s)}</div>`).join("")}
+        <div class="thinking__list">
+          ${steps.map((s) => `
+            <div class="tstep">
+              <span class="tstep__ico">
+                <span class="tstep__spin"></span>
+                <svg class="tstep__check" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+              </span>
+              <span>${esc(s)}</span>
+            </div>`).join("")}
         </div>
+        <div class="skel-cards">${skelCard}${skelCard}</div>
       </div>
     `);
-    // En preview la pantalla queda congelada, con todos los pasos visibles.
+    // En preview la pantalla queda congelada, con todos los pasos completos.
     if (state._preview) {
-      node.querySelectorAll(".thinking__step").forEach((el) => el.classList.add("show"));
+      node.querySelectorAll(".tstep").forEach((el) => el.classList.add("is-done"));
+      node.querySelector(".skel-cards").classList.add("show");
       return node;
     }
     // Token de esta corrida: si el usuario navega antes de terminar, no lo
     // teletransportamos a resultados.
     const run = (state._thinkingRun = {});
-    setTimeout(() => {
-      const els = node.querySelectorAll(".thinking__step");
-      els.forEach((el, idx) => setTimeout(() => el.classList.add("show"), idx * 550));
+    const els = Array.prototype.slice.call(node.querySelectorAll(".tstep"));
+    let t = 120;
+    els.forEach((el, idx) => {
+      const dur = 480 + Math.random() * 320; // duración levemente aleatoria
+      setTimeout(() => el.classList.add("is-active"), t);
+      t += dur;
       setTimeout(() => {
-        if (state._thinkingRun === run && state.screen === "thinking") {
-          milestone("results_shown", {
-            type: state.searchType,
-            count: (state.searchType === "tour" ? D.tours : D.opciones).slice(0, 5).length,
-          });
-          go("resultados");
-        }
-      }, els.length * 550 + 700);
-    }, 30);
+        el.classList.remove("is-active");
+        el.classList.add("is-done");
+        if (idx === 1) node.querySelector(".skel-cards").classList.add("show");
+      }, t);
+    });
+    setTimeout(() => {
+      if (state._thinkingRun === run && state.screen === "thinking") {
+        milestone("results_shown", {
+          type: state.searchType,
+          count: (state.searchType === "tour" ? D.tours : D.opciones).slice(0, 5).length,
+        });
+        go("resultados");
+      }
+    }, t + 500);
     return node;
   };
+
+  /* ---- Match %: qué tan bien coincide una oferta con el contexto ---- */
+  // Determinístico: campos usados con valor / total + bonus por destacada,
+  // menos penalidad si el precio supera el presupuesto. Rango 40–99.
+  function matchScore(o) {
+    const usados = o.contextoUsado || [];
+    const conValor = usados.filter((k) => {
+      const v = fieldValue(k);
+      return v !== "" && v != null && v !== "—";
+    }).length;
+    const frac = usados.length ? conValor / usados.length : 0.5;
+    let s = 62 + Math.round(frac * 30);
+    if (o.destacada) s += 6;
+    const budget = Number(fieldValue("stay.budget.max")) || 0;
+    const precio = o.esTour ? o.precio : o.precioNoche;
+    if (budget && precio > budget) s -= 8;
+    return Math.max(40, Math.min(99, s));
+  }
+
+  const RING_C = (2 * Math.PI * 18).toFixed(1);
+  function matchRing(score) {
+    const off = (RING_C * (1 - score / 100)).toFixed(1);
+    return `<div class="matchring" title="Coincidencia con tu contexto" role="img" aria-label="${score}% de match">
+      <svg viewBox="0 0 44 44" aria-hidden="true">
+        <circle class="matchring__bg" cx="22" cy="22" r="18"></circle>
+        <circle class="matchring__val" cx="22" cy="22" r="18" stroke-dasharray="${RING_C}" stroke-dashoffset="${RING_C}" data-ring="${off}"></circle>
+      </svg>
+      <span class="matchring__num">${score}%</span>
+    </div>`;
+  }
 
   // Tarjeta de resultado, sirve para alojamiento y experiencia.
   function offerCard(o) {
@@ -929,7 +1206,10 @@
             <div style="font-weight:700;margin-top:6px">${esc(o.nombre)}</div>
             <div class="muted">${sub}</div>
           </div>
-          <div class="opt__price">${price}</div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+            ${matchRing(matchScore(o))}
+            <div class="opt__price">${price}</div>
+          </div>
         </div>
         <div class="chip-wrap" style="margin-top:8px">${source}${premiumChip}</div>
         <ul class="match-list">${matches}</ul>
@@ -945,6 +1225,11 @@
     const cards = top.map(offerCard).join("");
     const titulo = top.length + (isTour ? " experiencias para vos" : " opciones para vos");
     return view(`
+      <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+        <linearGradient id="ringgrad" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#5566ff"/><stop offset="1" stop-color="#23c3a4"/>
+        </linearGradient>
+      </defs></svg>
       ${sHead(titulo, "agente")}
       <div class="card card--soft"><div class="muted">Aria buscó ${isTour ? "experiencias" : "alojamiento"} en tus <b style="color:var(--txt-dim)">apps conectadas</b> usando tu contexto. Tocá una y seguí la reserva directamente en esa app.</div></div>
       ${cards}
@@ -991,6 +1276,12 @@
     const o = findOffer(state.selectedOptionId) || {};
     const app = appById(o.sourceAppId);
     const esTour = !!o.esTour;
+
+    // Celebración: confetti al llegar desde una reserva recién confirmada.
+    if (state._celebrate && !state._preview) {
+      state._celebrate = false;
+      setTimeout(confetti, 350);
+    }
 
     // Cross-sell: tras reservar un alojamiento, sugerir experiencias en el MISMO
     // destino, ordenadas por el contexto del usuario.
@@ -1053,42 +1344,66 @@
   };
 
   /* ============================================================ CHAT (carga conversacional) */
-  screens.chatload = function () {
-    const msgs = state.chat
+  // Piezas del chat que se re-renderizan solas (sin tocar la barra de entrada,
+  // así el foco y el teclado del tester no se pierden en cada mensaje).
+  function buildChatMsgs() {
+    return state.chat
       .map((m) => {
+        if (m.typing) {
+          return `<div class="bubble bubble--agent bubble--typing" aria-label="El agente está escribiendo"><span></span><span></span><span></span></div>`;
+        }
         const chips = (m.chips && m.chips.length)
           ? `<div class="bubble__chips chip-wrap">${m.chips.map((c) => `<span class="chip">${esc(c)}</span>`).join("")}</div>`
           : "";
         return `<div class="bubble bubble--${m.role === "user" ? "user" : "agent"}">${esc(m.text)}${chips}</div>`;
       })
       .join("");
+  }
 
-    // Respuestas rápidas + saltar + aviso de texto libre (durante el guiado).
-    let quickBlock = "";
+  // Respuestas rápidas + saltar + aviso de texto libre (durante el guiado).
+  function buildQuickBlock() {
     const step = state.guideStep < GUIDE.length ? GUIDE[state.guideStep] : null;
-    if (step && !state.chatDone) {
-      const f = findField(step.key);
-      let opts = [];
-      if (f && f.opciones) opts = f.opciones.slice();
-      else if (step.key === "stay.budget.max") opts = ["120 USD", "180 USD", "250 USD"];
-      const chips = opts
-        .map((s) => `<button data-action="chat-suggest" data-text="${esc(s)}">${esc(s)}</button>`)
-        .join("");
-      quickBlock = `
-        <div class="chat-suggest">
-          ${chips}
-          <button data-action="chat-skip" style="border-style:dashed">Prefiero no decirlo</button>
-        </div>
-        <div class="muted" style="text-align:center;font-size:0.76rem;margin:2px 0 6px">
-          Elegí una opción o escribí/dictá tu propia respuesta. 🎤
-        </div>`;
-    }
+    if (!step || state.chatDone || state._typingTimer) return "";
+    const f = findField(step.key);
+    let opts = [];
+    if (f && f.opciones) opts = f.opciones.slice();
+    else if (step.key === "stay.budget.max") opts = ["120 USD", "180 USD", "250 USD"];
+    const chips = opts
+      .map((s) => `<button data-action="chat-suggest" data-text="${esc(s)}">${esc(s)}</button>`)
+      .join("");
+    return `
+      <div class="chat-suggest">
+        ${chips}
+        <button data-action="chat-skip" style="border-style:dashed">Prefiero no decirlo</button>
+      </div>
+      <div class="muted" style="text-align:center;font-size:0.76rem;margin:2px 0 6px">
+        Elegí una opción o escribí/dictá tu propia respuesta. 🎤
+      </div>`;
+  }
 
-    const progreso = state.guideStep < GUIDE.length
+  function buildProgress() {
+    return state.guideStep < GUIDE.length
       ? `<div class="progress" style="margin-bottom:14px">${GUIDE.map((_, i) =>
           `<div class="progress__dot ${i < state.guideStep ? "is-done" : i === state.guideStep ? "is-active" : ""}"></div>`
         ).join("")}</div>`
       : "";
+  }
+
+  // Re-render parcial: solo mensajes, chips y progreso.
+  function renderChatArea() {
+    const log = document.getElementById("chat-log");
+    if (!log) return; // no estamos en el chat
+    log.innerHTML = buildChatMsgs();
+    const quick = document.getElementById("chat-quick");
+    if (quick) quick.innerHTML = buildQuickBlock();
+    const prog = document.getElementById("chat-progress");
+    if (prog) prog.innerHTML = buildProgress();
+  }
+
+  screens.chatload = function () {
+    const msgs = buildChatMsgs();
+    const quickBlock = `<div id="chat-quick">${buildQuickBlock()}</div>`;
+    const progreso = `<div id="chat-progress">${buildProgress()}</div>`;
 
     // Resumen del contexto al terminar el guiado.
     const resumen = state.guidedComplete
@@ -1103,7 +1418,7 @@
     return view(`
       ${sHead("Armar mi contexto", "pasaporte")}
       ${progreso}
-      <div class="chat">${msgs}</div>
+      <div class="chat" id="chat-log" aria-live="polite">${msgs}</div>
       ${quickBlock}
       ${resumen}
       ${state.guidedComplete
@@ -1191,7 +1506,8 @@
 
   function chatSend(text, source) {
     const clean = (text || "").trim();
-    if (!clean) return;
+    if (!clean) return false;
+    if (state._typingTimer) return false; // el agente todavía está "escribiendo"
     // Solo fuente, paso y longitud: el contenido del chat nunca se trackea.
     track("chat_msg", {
       source: source || "text",
@@ -1199,6 +1515,9 @@
       len: clean.length,
     });
     state.chat.push({ role: "user", text: clean });
+
+    const estabaCompleto = state.guidedComplete;
+    const antes = state.chat.length;
     if (state.guideStep < GUIDE.length) {
       guidedTurn(clean);
     } else {
@@ -1210,7 +1529,41 @@
         state.chat.push({ role: "agent", text: "Puedo seguir anotando lo que me cuentes, o tocá “Listo, ver mi contexto”." });
       }
     }
-    render();
+
+    // Diferir la respuesta del agente detrás de un typing indicator.
+    const respuestas = state.chat.splice(antes);
+    if (reducedMotion()) {
+      respuestas.forEach((r) => state.chat.push(r));
+      chatAfterReply(estabaCompleto);
+      return true;
+    }
+    state.chat.push({ role: "agent", typing: true });
+    renderChatArea();
+    scrollChatBottom();
+    state._typingTimer = setTimeout(() => {
+      state._typingTimer = null;
+      const ultimo = state.chat[state.chat.length - 1];
+      if (ultimo && ultimo.typing) state.chat.pop(); // saca el typing (si el chat no fue reiniciado)
+      respuestas.forEach((r) => state.chat.push(r));
+      chatAfterReply(estabaCompleto);
+      saveSoon();
+    }, 480 + Math.random() * 420);
+    return true;
+  }
+
+  function cancelTyping() {
+    if (state._typingTimer) {
+      clearTimeout(state._typingTimer);
+      state._typingTimer = null;
+    }
+    state.chat = state.chat.filter((m) => !m.typing);
+  }
+
+  // Cuando el guiado termina hay que re-renderizar la pantalla completa
+  // (aparecen el resumen y los botones); si no, alcanza con el área del chat.
+  function chatAfterReply(estabaCompleto) {
+    if (state.guidedComplete && !estabaCompleto && state.screen === "chatload") render();
+    else renderChatArea();
     scrollChatBottom();
   }
 
@@ -1652,14 +2005,28 @@
     if (actEl) handleAction(actEl.dataset.action, actEl);
   });
 
+  // Enter envía en el chat (Shift+Enter hace salto de línea).
   // Las cards con role="button" también responden a Enter/Espacio.
   screenEl.addEventListener("keydown", (e) => {
+    if (e.target && e.target.id === "chat-input" && e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleAction("chat-send", e.target);
+      return;
+    }
     if (e.key !== "Enter" && e.key !== " ") return;
     if (e.target.matches("input, select, textarea, button, a")) return;
     const el = e.target.closest('[role="button"]');
     if (!el) return;
     e.preventDefault();
     el.click();
+  });
+
+  // El textarea del chat crece con el texto (hasta 120 px).
+  screenEl.addEventListener("input", (e) => {
+    if (e.target && e.target.id === "chat-input") {
+      e.target.style.height = "auto";
+      e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
+    }
   });
 
   screenEl.addEventListener("change", (e) => {
@@ -1719,7 +2086,12 @@
         toast("Perfil de ejemplo cargado");
         go("pasaporte");
         break;
-      case "onboarding-next":
+      case "onboarding-next": {
+        const errV = validateDom(state.passport[state.onboardingStep]);
+        if (errV) {
+          markFieldError(errV.key, errV.msg);
+          break;
+        }
         if (state.onboardingStep < state.passport.length - 1) {
           state.onboardingStep++;
           defaultSelects(state.passport[state.onboardingStep]);
@@ -1732,6 +2104,7 @@
           go("onboardingDone");
         }
         break;
+      }
       case "onboarding-prev":
         if (state.onboardingStep > 0) state.onboardingStep--;
         go("onboarding");
@@ -1749,6 +2122,7 @@
       /* ---- Carga conversacional ---- */
       case "start-chatload":
         resetEmptyUser();
+        cancelTyping();
         milestone("onboarding_start", { mode: "chat" });
         state.guideStep = 0;
         state.chatDone = false;
@@ -1765,7 +2139,11 @@
       case "chat-send": {
         const input = document.getElementById("chat-input");
         const v = input ? input.value : "";
-        chatSend(v);
+        if (chatSend(v) && input) {
+          input.value = "";
+          input.style.height = "";
+          input.focus();
+        }
         break;
       }
       case "chat-suggest":
@@ -1800,6 +2178,7 @@
         break;
       }
       case "start-chat-update":
+        cancelTyping();
         state.guideStep = GUIDE.length; // modo libre (no reinicia el contexto)
         state.chatDone = true;
         state.guidedComplete = false;
@@ -1989,6 +2368,8 @@
           });
         }
         state.openListingId = null;
+        state._celebrate = true;
+        buzz(18);
         go("reservaOk");
         break;
       }
@@ -2011,31 +2392,83 @@
         go("premium");
         break;
       case "subscribe-premium":
+        state._ptsFrom = state.points;
         state.premium = true;
         state.premiumPlan = state.selectedPlan || "anual";
         state.points += 200; // puntos de bienvenida
         milestone("premium_subscribed", { plan: state.premiumPlan });
+        buzz();
         toast("¡Bienvenido a Premium! +200 pts de regalo");
         go("premium");
+        confetti();
         break;
+
       case "cancel-premium":
+        openSheet(`
+          <h2 class="title">¿Cancelar tu suscripción Premium?</h2>
+          <p class="muted" style="margin-bottom:16px">Perdés los descuentos y las membresías en los proveedores. Tus ${state.points.toLocaleString("es")} puntos quedan congelados hasta que vuelvas.</p>
+          <div class="btn-stack">
+            <button class="btn btn--danger" data-action="confirm-cancel-premium">Sí, cancelar Premium</button>
+            <button class="btn btn--ghost" data-action="close-sheet">Seguir siendo Premium</button>
+          </div>`);
+        break;
+      case "confirm-cancel-premium":
+        closeSheet();
         state.premium = false;
         state.premiumPlan = null;
         milestone("premium_cancelled");
         toast("Suscripción cancelada");
         go("pasaporte");
         break;
+
       case "redeem": {
         const rw = PREM.rewards.find((x) => x.id === el.dataset.reward);
         if (!rw) break;
         if (state.points < rw.costo) return toast("No te alcanzan los puntos");
+        openSheet(`
+          <h2 class="title">${esc(rw.icono)} ${esc(rw.titulo)}</h2>
+          <p class="muted" style="margin-bottom:16px">${esc(rw.detalle)}. Cuesta <b>${rw.costo.toLocaleString("es")} puntos</b> y te quedarían ${(state.points - rw.costo).toLocaleString("es")}.</p>
+          <div class="btn-stack">
+            <button class="btn" data-action="confirm-redeem" data-reward="${rw.id}">Confirmar canje</button>
+            <button class="btn btn--ghost" data-action="close-sheet">Ahora no</button>
+          </div>`);
+        break;
+      }
+      case "confirm-redeem": {
+        const rw = PREM.rewards.find((x) => x.id === el.dataset.reward);
+        if (!rw || state.points < rw.costo) { closeSheet(); break; }
+        closeSheet();
         milestone("reward_redeemed", { reward: rw.id, costo: rw.costo });
+        state._ptsFrom = state.points;
         state.points -= rw.costo;
         state.redemptions.unshift({ titulo: rw.titulo, costo: rw.costo, fecha: "Ahora" });
+        buzz();
         toast("Canjeaste: " + rw.titulo);
         go("premium");
         break;
       }
+
+      case "ask-revoke": {
+        const g = state.grants.find((x) => x.id === el.dataset.grant);
+        if (!g) break;
+        openSheet(`
+          <h2 class="title">¿Revocar el acceso de ${esc(g.solicitante)}?</h2>
+          <p class="muted" style="margin-bottom:16px">Deja de ver los campos que le compartiste. Podés reactivarlo cuando quieras desde esta misma pantalla.</p>
+          <div class="btn-stack">
+            <button class="btn btn--danger" data-action="confirm-revoke" data-grant="${esc(g.id)}">Sí, revocar acceso</button>
+            <button class="btn btn--ghost" data-action="close-sheet">Cancelar</button>
+          </div>`);
+        break;
+      }
+      case "confirm-revoke":
+        closeSheet();
+        buzz();
+        toggleGrant(el.dataset.grant);
+        break;
+
+      case "close-sheet":
+        closeSheet();
+        break;
 
     }
   }
@@ -2086,6 +2519,7 @@
     state.appLogged[a.id] = true;
     state.ssoDraft = null;
     milestone("sso_granted", { app: a.id, fields_count: keys.length, fields: keys });
+    buzz();
     toast("Sesión iniciada con ContextLayer ✓");
     go("thirdApp");
   }
