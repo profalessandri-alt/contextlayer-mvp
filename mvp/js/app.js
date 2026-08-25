@@ -425,6 +425,9 @@
 
     state._navDir = mismo ? "none" : dirBetween(desde, screen);
     state.screen = screen;
+    // Volver a cualquier pantalla con tabs restaura la vista de usuario
+    // (evita que la tabbar quede oculta tras un refresh dentro de una app).
+    if (USER_TABS.indexOf(screen) >= 0) state.perspective = "user";
     if (!mismo) closeSheet(true);
 
     // Misma pantalla con otro parámetro (ej. volver al selector de apps):
