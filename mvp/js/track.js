@@ -146,12 +146,13 @@
   // no permite SELECT) e `ignore-duplicates` hace idempotente el reintento.
   function sbInsert(table, rows, onConflict) {
     const qs = onConflict ? "?on_conflict=" + onConflict : "";
+    // Solo apikey: sin Authorization el gateway asume el rol anon, y así
+    // funciona igual con claves legacy (JWT) y nuevas (sb_publishable_...).
     return fetch(T.url + "/rest/v1/" + table + qs, {
       method: "POST",
       headers: {
         "content-type": "application/json",
         apikey: T.key,
-        authorization: "Bearer " + T.key,
         prefer: "return=minimal" + (onConflict ? ",resolution=ignore-duplicates" : ""),
       },
       body: JSON.stringify(rows),
@@ -183,7 +184,6 @@
       headers: {
         "content-type": "application/json",
         apikey: T.key,
-        authorization: "Bearer " + T.key,
         prefer: "return=minimal,resolution=ignore-duplicates",
       },
       body: JSON.stringify(batch),
