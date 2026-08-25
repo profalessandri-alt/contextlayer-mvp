@@ -11,6 +11,10 @@
   const screenEl = document.getElementById("screen");
   const tabbar = document.getElementById("tabbar");
 
+  // Analítica tolerante: si track.js no está, no pasa nada.
+  const track = (t, p) => window.CLTrack && window.CLTrack.ev(t, p);
+  const milestone = (name, p) => window.CLTrack && window.CLTrack.milestone(name, p);
+
   /* -------------------------------------------------------------- Utils */
   const esc = (s) =>
     String(s == null ? "" : s)
@@ -301,6 +305,11 @@
 
     render();
     if (!mismo) screenEl.scrollTop = (opts.pop && scrollMem[navIdx] && scrollMem[navIdx].top) || 0;
+    if (!mismo) {
+      document.dispatchEvent(new CustomEvent("cl:nav", {
+        detail: { screen, prev: desde, dir: state._navDir },
+      }));
+    }
     saveSoon();
   }
 
@@ -875,7 +884,13 @@
       const els = node.querySelectorAll(".thinking__step");
       els.forEach((el, idx) => setTimeout(() => el.classList.add("show"), idx * 550));
       setTimeout(() => {
-        if (state._thinkingRun === run && state.screen === "thinking") go("resultados");
+        if (state._thinkingRun === run && state.screen === "thinking") {
+          milestone("results_shown", {
+            type: state.searchType,
+            count: (state.searchType === "tour" ? D.tours : D.opciones).slice(0, 5).length,
+          });
+          go("resultados");
+        }
       }, els.length * 550 + 700);
     }, 30);
     return node;
@@ -1169,9 +1184,15 @@
     return ups;
   }
 
-  function chatSend(text) {
+  function chatSend(text, source) {
     const clean = (text || "").trim();
     if (!clean) return;
+    // Solo fuente, paso y longitud: el contenido del chat nunca se trackea.
+    track("chat_msg", {
+      source: source || "text",
+      step_key: state.guideStep < GUIDE.length ? GUIDE[state.guideStep].key : null,
+      len: clean.length,
+    });
     state.chat.push({ role: "user", text: clean });
     if (state.guideStep < GUIDE.length) {
       guidedTurn(clean);
@@ -1254,6 +1275,7 @@
     state.chatDone = true;
     state.guidedComplete = true;
     state.onboarded = true;
+    milestone("onboarding_complete", { mode: "chat" });
   }
 
   /* ---- Resumen en lenguaje natural del contexto ---- */
@@ -1682,11 +1704,13 @@
         resetEmptyUser();
         state.onboardingStep = 0;
         defaultSelects(state.passport[0]);
+        milestone("onboarding_start", { mode: "form" });
         go("onboarding");
         break;
       case "load-demo":
         loadDemoUser();
         state.onboarded = true;
+        milestone("demo_loaded");
         toast("Perfil de ejemplo cargado");
         go("pasaporte");
         break;
@@ -1698,6 +1722,7 @@
         } else {
           state.onboarded = true;
           state.narrativeEdited = false;
+          milestone("onboarding_complete", { mode: "form" });
           toast("Contexto creado ✓");
           go("onboardingDone");
         }
@@ -1719,6 +1744,7 @@
       /* ---- Carga conversacional ---- */
       case "start-chatload":
         resetEmptyUser();
+        milestone("onboarding_start", { mode: "chat" });
         state.guideStep = 0;
         state.chatDone = false;
         state.guidedComplete = false;
@@ -1738,7 +1764,7 @@
         break;
       }
       case "chat-suggest":
-        chatSend(el.dataset.text);
+        chatSend(el.dataset.text, "chip");
         break;
       case "edit-summary":
         state.summaryEditKey = el.dataset.key;
@@ -1760,6 +1786,7 @@
       }
       case "chat-skip": {
         if (state.guideStep >= GUIDE.length) break;
+        track("chat_msg", { source: "skip", step_key: GUIDE[state.guideStep].key });
         state.chat.push({ role: "user", text: "Prefiero no decirlo" });
         state.chat.push({ role: "agent", text: "Sin problema, lo dejo en blanco. Podés completarlo cuando quieras." });
         advanceGuide();
@@ -1808,9 +1835,11 @@
         break;
       case "open-sso":
         state.ssoDraft = null;
+        milestone("sso_opened", { app: state.currentAppId });
         go("sso");
         break;
       case "cancel-sso":
+        milestone("sso_cancelled", { app: state.currentAppId });
         go("thirdApp");
         break;
       case "grant-sso":
@@ -1818,6 +1847,7 @@
         break;
       case "app-logout": {
         const id = el.dataset.app;
+        milestone("app_logout", { app: id });
         delete state.appLogged[id];
         state.openListingId = null;
         // revocar el permiso asociado a esta app
@@ -1851,6 +1881,11 @@
         const input = document.getElementById("pedido-input");
         if (input) state.pedido = input.value.trim();
         if (!state.pedido) return toast("Contale a Aria qué necesitás");
+        milestone("search_run", {
+          type: state.searchType,
+          pedido_len: state.pedido.length,
+          edited: state.pedido !== D.pedidoSugerido && state.pedido !== D.pedidoSugeridoTour,
+        });
         addReceipt({
           tipo: "read",
           solicitante: "Aria · tu agente de viaje",
@@ -1869,6 +1904,12 @@
       case "book-in-app": {
         const o = findOffer(el.dataset.opt);
         if (!o) break;
+        milestone("option_open", {
+          opt: o.id,
+          app: o.sourceAppId,
+          type: o.esTour ? "tour" : "stay",
+          position: (o.esTour ? D.tours : D.opciones).findIndex((x) => x.id === o.id),
+        });
         state.selectedOptionId = o.id;
         state.openListingId = o.id;
         state.currentAppId = o.sourceAppId;
@@ -1933,6 +1974,15 @@
             );
           }
         }
+        if (a && o) {
+          milestone("booking_confirmed", {
+            opt: o.id,
+            app: a.id,
+            type: o.esTour ? "tour" : "stay",
+            premium: isPremium(),
+            total: premiumPrice(o.esTour ? o.precio : o.precioNoche * 3),
+          });
+        }
         state.openListingId = null;
         go("reservaOk");
         break;
@@ -1959,12 +2009,14 @@
         state.premium = true;
         state.premiumPlan = state.selectedPlan || "anual";
         state.points += 200; // puntos de bienvenida
+        milestone("premium_subscribed", { plan: state.premiumPlan });
         toast("¡Bienvenido a Premium! +200 pts de regalo");
         go("premium");
         break;
       case "cancel-premium":
         state.premium = false;
         state.premiumPlan = null;
+        milestone("premium_cancelled");
         toast("Suscripción cancelada");
         go("pasaporte");
         break;
@@ -1972,6 +2024,7 @@
         const rw = PREM.rewards.find((x) => x.id === el.dataset.reward);
         if (!rw) break;
         if (state.points < rw.costo) return toast("No te alcanzan los puntos");
+        milestone("reward_redeemed", { reward: rw.id, costo: rw.costo });
         state.points -= rw.costo;
         state.redemptions.unshift({ titulo: rw.titulo, costo: rw.costo, fecha: "Ahora" });
         toast("Canjeaste: " + rw.titulo);
@@ -1992,6 +2045,7 @@
     if (!g) return;
     g.activo = !g.activo;
     if (!g.activo) g.duracion = "Revocado hace instantes";
+    milestone(g.activo ? "grant_reactivated" : "grant_revoked", { grant: g.id });
     toast(g.activo ? "Acceso reactivado" : "Acceso revocado");
     go("permisos");
   }
@@ -2026,6 +2080,7 @@
     });
     state.appLogged[a.id] = true;
     state.ssoDraft = null;
+    milestone("sso_granted", { app: a.id, fields_count: keys.length, fields: keys });
     toast("Sesión iniciada con ContextLayer ✓");
     go("thirdApp");
   }
@@ -2065,11 +2120,11 @@
       const b = document.querySelector(".mic-btn");
       if (b) b.classList.remove("is-listening");
     };
-    recog.onerror = () => { stop(); toast("No se pudo activar el micrófono"); };
+    recog.onerror = () => { stop(); track("voice_error"); toast("No se pudo activar el micrófono"); };
     recog.onend = () => {
       stop();
       const val = input ? input.value.trim() : "";
-      if (val) chatSend(val);
+      if (val) chatSend(val, "voice");
     };
     try { recog.start(); } catch (e) { stop(); }
   }
@@ -2100,5 +2155,8 @@
     history.replaceState({ idx: 0 }, "", routeFor(inicial));
     scrollMem[0] = { route: routeFor(inicial), top: 0 };
     render();
+    document.dispatchEvent(new CustomEvent("cl:nav", {
+      detail: { screen: inicial, prev: null, dir: "none" },
+    }));
   })();
 })();
