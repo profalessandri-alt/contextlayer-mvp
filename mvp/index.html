@@ -6,6 +6,11 @@
   <meta name="theme-color" content="#0f1226" />
   <title>ContextLayer · Prototipo</title>
   <link rel="icon" href="img/favicon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="img/icon-192.png" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <!-- Tema elegido por el tester, aplicado antes del primer paint (sin flash) -->
+  <script>try { var t = localStorage.getItem("cl_theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
+  <link rel="preload" href="fonts/manrope.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="css/styles.css?v=30" />
 </head>
 <body>
@@ -33,6 +38,7 @@
   </div>
 
   <script src="js/config.js?v=30"></script>
+  <script src="js/icons.js?v=30"></script>
   <script src="js/data.js?v=30"></script>
   <script src="js/track.js?v=30"></script>
   <script src="js/app.js?v=30"></script>

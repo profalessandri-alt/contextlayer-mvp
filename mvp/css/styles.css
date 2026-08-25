@@ -26,6 +26,14 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* Tipografía display para títulos (variable, vendoreada, solo latin) */
+@font-face {
+  font-family: "Manrope";
+  src: url("../fonts/manrope.woff2") format("woff2");
+  font-weight: 200 800;
+  font-display: swap;
+}
+
 html, body {
   height: 100%;
   background: #e7ebf6;
@@ -98,8 +106,12 @@ body {
   color: var(--brand-2);
   font-weight: 700;
 }
-h1.title { font-size: 1.6rem; line-height: 1.2; margin: 6px 0 8px; }
-h2.title { font-size: 1.25rem; margin: 4px 0 6px; }
+h1.title, h2.title, .shead__title {
+  font-family: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  letter-spacing: -0.4px;
+}
+h1.title { font-size: 1.65rem; line-height: 1.18; margin: 6px 0 8px; font-weight: 800; }
+h2.title { font-size: 1.28rem; margin: 4px 0 6px; font-weight: 800; }
 .lead { color: var(--txt-dim); font-size: 0.95rem; line-height: 1.5; }
 .section-label {
   font-size: 0.78rem;
@@ -288,7 +300,7 @@ h2.title { font-size: 1.25rem; margin: 4px 0 6px; }
 /* ---------- Option (result) card ---------- */
 .opt__top { display: flex; justify-content: space-between; gap: 10px; }
 .opt__price { text-align: right; flex: none; }
-.opt__price b { font-size: 1.15rem; }
+.opt__price b { font-size: 1.15rem; font-family: "Manrope", -apple-system, sans-serif; }
 .match-list { list-style: none; margin: 12px 0 0; }
 .match-list li {
   display: flex; gap: 8px; align-items: flex-start;
@@ -349,7 +361,7 @@ h2.title { font-size: 1.25rem; margin: 4px 0 6px; }
 .tabbar {
   display: flex;
   border-top: 1px solid var(--line);
-  background: rgba(255,255,255,0.97);
+  background: var(--surface);
   backdrop-filter: blur(8px);
   padding-bottom: env(safe-area-inset-bottom);
 }
@@ -361,10 +373,11 @@ h2.title { font-size: 1.25rem; margin: 4px 0 6px; }
   display: flex; flex-direction: column; align-items: center; gap: 3px;
   color: var(--txt-mute);
 }
-.tabbar__ico { font-size: 1.2rem; filter: grayscale(1) opacity(0.7); }
+.tabbar__ico { display: block; height: 22px; opacity: 0.72; }
+.tabbar__ico .ico { width: 22px; height: 22px; }
 .tabbar__lbl { font-size: 0.66rem; font-weight: 600; }
 .tabbar__btn.is-active { color: var(--brand-2); }
-.tabbar__btn.is-active .tabbar__ico { filter: none; }
+.tabbar__btn.is-active .tabbar__ico { opacity: 1; }
 
 /* ---------- Toast ---------- */
 .toast {
@@ -439,19 +452,19 @@ h2.title { font-size: 1.25rem; margin: 4px 0 6px; }
 
 /* Bloque de "payload" que se comparte (preview técnico) */
 .codeblock {
-  background: #f2f4fb;
+  background: var(--bg-2);
   border: 1px solid var(--line);
   border-radius: 12px;
   padding: 13px 14px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.76rem;
   line-height: 1.55;
-  color: #0f8f7c;
+  color: var(--ok);
   overflow-x: auto;
   white-space: pre;
 }
-.codeblock .c-key { color: #4a53c9; }
-.codeblock .c-str { color: #0f8f7c; }
+.codeblock .c-key { color: var(--brand); }
+.codeblock .c-str { color: var(--ok); }
 .codeblock .c-cmt { color: var(--txt-mute); }
 
 /* Recibos (actividad) */
@@ -567,7 +580,7 @@ h2.title { font-size: 1.25rem; margin: 4px 0 6px; }
 .appframe__bar {
   display: flex; align-items: center; gap: 8px;
   padding: 9px 12px;
-  background: #eef1f8;
+  background: var(--surface-2);
   font-size: 0.74rem;
   color: var(--txt-mute);
   border-bottom: 1px solid var(--line);
@@ -595,7 +608,7 @@ h2.title { font-size: 1.25rem; margin: 4px 0 6px; }
   color: #fff; font-size: 0.85rem;
 }
 .btn-plain {
-  width: 100%; background: #fff; color: var(--txt);
+  width: 100%; background: var(--surface); color: var(--txt);
   border: 1px solid var(--line); border-radius: 13px; padding: 13px;
   font-weight: 600; font-size: 0.9rem; cursor: pointer; margin-bottom: 10px;
 }
@@ -861,7 +874,7 @@ body.preview-mode {
 
 /* Esqueletos (shimmer) */
 .skel {
-  background: linear-gradient(90deg, var(--surface-2) 25%, #e6eaf5 45%, var(--surface-2) 65%);
+  background: linear-gradient(90deg, var(--surface-2) 25%, var(--line) 45%, var(--surface-2) 65%);
   background-size: 200% 100%;
   border-radius: 8px;
   animation: shimmer 1.3s ease infinite;
@@ -965,4 +978,99 @@ body.preview-mode {
 
 @media (prefers-reduced-motion: reduce) {
   .matchring__val { transition: none; }
+}
+
+/* ============================================================================
+ * v2 — Íconos SVG inline (icons.js)
+ * ==========================================================================*/
+.ico { width: 1.2em; height: 1.2em; display: inline-block; vertical-align: -0.24em; flex: none; }
+.ico--sm { width: 0.95em; height: 0.95em; vertical-align: -0.12em; }
+.ico--xl { width: 34px; height: 34px; }
+.avatar .ico { width: 22px; height: 22px; color: var(--brand); }
+.value-row__ico .ico { width: 19px; height: 19px; color: var(--brand); }
+.empty__ico .ico { width: 34px; height: 34px; }
+.btn .ico, .icon-btn .ico { width: 20px; height: 20px; }
+.seg__btn .ico { width: 16px; height: 16px; vertical-align: -0.22em; }
+.chip .ico--sm { width: 13px; height: 13px; }
+.shead__right { margin-left: auto; }
+.shead .icon-btn { width: 38px; height: 38px; background: var(--surface); border-radius: 50%; }
+.shead__back { display: grid; place-items: center; }
+.shead__back .ico { width: 20px; height: 20px; }
+
+/* ============================================================================
+ * v2 — Micro-encuesta de feedback
+ * ==========================================================================*/
+.fb-faces { display: flex; justify-content: center; gap: 8px; }
+.fb-face {
+  width: 52px; height: 52px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  font-size: 1.55rem;
+  cursor: pointer;
+  transition: transform 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+}
+.fb-face:active { transform: scale(0.92); }
+.fb-face.is-on { border-color: var(--brand-2); background: rgba(35, 195, 164, 0.14); transform: scale(1.08); }
+.fb-tag { cursor: pointer; }
+
+/* ============================================================================
+ * v2 — Dark mode
+ * Automático según el sistema; el toggle (sol/luna en el pasaporte) lo fija
+ * explícito vía <html data-theme="dark|light"> persistido en cl_theme.
+ * ==========================================================================*/
+html[data-theme="dark"] {
+  --bg: #0f1226;
+  --bg-2: #161a33;
+  --surface: #181c34;
+  --surface-2: #232848;
+  --line: #272d4f;
+  --txt: #eef0fb;
+  --txt-dim: #b3b9dd;
+  --txt-mute: #7d84ad;
+  --brand: #7c8cff;
+  --brand-2: #2bd4b4;
+  --brand-grad: linear-gradient(135deg, #5b6cff 0%, #23c3a4 100%);
+  --danger: #ff6b7d;
+  --warn: #ffce6b;
+  --ok: #2bd4b4;
+  --shadow: 0 12px 34px rgba(0, 0, 0, 0.5);
+}
+html[data-theme="dark"],
+html[data-theme="dark"] body {
+  background:
+    radial-gradient(1000px 600px at 20% -10%, rgba(105, 120, 255, 0.14), transparent),
+    radial-gradient(800px 500px at 100% 110%, rgba(35, 195, 164, 0.1), transparent),
+    #0a0d1f;
+}
+html[data-theme="dark"] .toast { background: #eef0fb; border-color: #eef0fb; color: #12152b; }
+html[data-theme="dark"] .seg__btn.is-active { box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5); }
+
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) {
+    --bg: #0f1226;
+    --bg-2: #161a33;
+    --surface: #181c34;
+    --surface-2: #232848;
+    --line: #272d4f;
+    --txt: #eef0fb;
+    --txt-dim: #b3b9dd;
+    --txt-mute: #7d84ad;
+    --brand: #7c8cff;
+    --brand-2: #2bd4b4;
+    --brand-grad: linear-gradient(135deg, #5b6cff 0%, #23c3a4 100%);
+    --danger: #ff6b7d;
+    --warn: #ffce6b;
+    --ok: #2bd4b4;
+    --shadow: 0 12px 34px rgba(0, 0, 0, 0.5);
+  }
+  html:not([data-theme="light"]),
+  html:not([data-theme="light"]) body {
+    background:
+      radial-gradient(1000px 600px at 20% -10%, rgba(105, 120, 255, 0.14), transparent),
+      radial-gradient(800px 500px at 100% 110%, rgba(35, 195, 164, 0.1), transparent),
+      #0a0d1f;
+  }
+  html:not([data-theme="light"]) .toast { background: #eef0fb; border-color: #eef0fb; color: #12152b; }
+  html:not([data-theme="light"]) .seg__btn.is-active { box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5); }
 }

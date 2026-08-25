@@ -303,7 +303,7 @@
     "selectedPlan", "points", "redemptions", "onboarded", "narrative",
     "narrativeEdited", "appLogged", "pedido", "searchType", "chat", "chatDone",
     "guideStep", "guidedComplete", "currentAppId", "_editDomId",
-    "selectedOptionId", "openListingId", "perspective",
+    "selectedOptionId", "openListingId", "perspective", "feedbackGiven",
   ];
 
   function saveState() {
@@ -479,10 +479,11 @@
     return wrap;
   }
 
-  function sHead(title, backTo) {
+  function sHead(title, backTo, rightHtml) {
     return `<div class="shead">
-      ${backTo ? `<button class="shead__back" data-go="${backTo}" aria-label="Volver">‹</button>` : ""}
+      ${backTo ? `<button class="shead__back" data-go="${backTo}" aria-label="Volver">${icon("chevron-left")}</button>` : ""}
       <div class="shead__title">${esc(title)}</div>
+      ${rightHtml ? `<div class="shead__right">${rightHtml}</div>` : ""}
     </div>`;
   }
 
@@ -572,7 +573,10 @@
     tabbar.hidden = !showTabs;
     if (showTabs) {
       tabbar.querySelectorAll(".tabbar__btn").forEach((b) => {
-        b.classList.toggle("is-active", b.dataset.nav === state.screen);
+        const activo = b.dataset.nav === state.screen;
+        b.classList.toggle("is-active", activo);
+        if (activo) b.setAttribute("aria-current", "page");
+        else b.removeAttribute("aria-current");
       });
     }
     // Re-bindear inputs de campos
@@ -595,15 +599,15 @@
 
           <div style="margin-top:22px">
             <div class="value-row">
-              <div class="value-row__ico">🪪</div>
+              <div class="value-row__ico">${icon("idcard")}</div>
               <div><b>Tu contexto de viaje</b><div class="muted">Preferencias, restricciones, actividades y presupuesto, siempre con vos.</div></div>
             </div>
             <div class="value-row">
-              <div class="value-row__ico">🔐</div>
+              <div class="value-row__ico">${icon("lock")}</div>
               <div><b>Vos aprobás cada acceso</b><div class="muted">Campo por campo, con propósito y vencimiento. Revocás cuando querés.</div></div>
             </div>
             <div class="value-row">
-              <div class="value-row__ico">🧾</div>
+              <div class="value-row__ico">${icon("receipt")}</div>
               <div><b>Todo deja recibo</b><div class="muted">Ves quién leyó qué y cuándo. Nada pasa a tus espaldas.</div></div>
             </div>
           </div>
@@ -611,9 +615,9 @@
         <div class="btn-stack">
           ${state.onboarded
             ? `<button class="btn" data-action="resume">Continuar${nombre ? " como " + esc(nombre) : ""}</button>
-               <button class="btn btn--ghost" data-action="start-chatload">💬 Armar un contexto nuevo</button>
+               <button class="btn btn--ghost" data-action="start-chatload">${icon("chat")} Armar un contexto nuevo</button>
                <button class="btn btn--ghost" data-action="reset-demo">Empezar de nuevo</button>`
-            : `<button class="btn" data-action="start-chatload">💬 Armar mi contexto charlando</button>
+            : `<button class="btn" data-action="start-chatload">${icon("chat")} Armar mi contexto charlando</button>
                <button class="btn btn--ghost" data-action="start-onboarding">Prefiero un formulario</button>
                <button class="btn btn--ghost" data-action="load-demo">Explorar con datos de ejemplo</button>`}
         </div>
@@ -637,7 +641,7 @@
     const last = i === doms.length - 1;
     return view(`
       <div class="progress">${dots}</div>
-      <div class="eyebrow">${esc(dom.icono)} Paso ${i + 1} de ${doms.length}</div>
+      <div class="eyebrow">Paso ${i + 1} de ${doms.length}</div>
       <h2 class="title">${esc(dom.dominio)}</h2>
       <p class="muted" style="margin-bottom:16px">Se guarda una sola vez en tu contexto. Después lo prestás con permisos.</p>
       ${campos}
@@ -673,7 +677,7 @@
       <textarea class="textarea" id="narrative-input" rows="4" style="font-style:italic">${esc(getNarrative())}</textarea>
       <div class="muted" style="font-size:0.74rem;margin:5px 2px 0">Resumen generado automáticamente. Podés editarlo.</div>
       <div class="btn-stack" style="margin-top:18px">
-        <button class="btn" data-action="plan-trip">✨ Planifiquemos el viaje</button>
+        <button class="btn" data-action="plan-trip">${icon("sparkles")} Planifiquemos el viaje</button>
         <button class="btn btn--ghost" data-action="skip-to-dashboard">Omitir por ahora</button>
       </div>
     `);
@@ -707,7 +711,7 @@
       return view(`
         ${sHead("ContextLayer Premium", "pasaporte")}
         <div class="card card--premium" style="border:none;text-align:center">
-          <div style="font-size:2rem">⭐</div>
+          <div style="color:#3a2c00">${icon("star", "ico--xl")}</div>
           <div style="font-weight:800;font-size:1.2rem;color:#3a2c00">Hacete Premium</div>
           <div style="color:#5c4a12;margin-top:2px">Una membresía, todos los proveedores.</div>
         </div>
@@ -765,7 +769,7 @@
       <div class="card card--premium" style="border:none">
         <div class="row row--between">
           <div>
-            <div style="font-weight:800;color:#3a2c00">⭐ Sos Premium</div>
+            <div style="font-weight:800;color:#3a2c00">${icon("star", "ico--sm")} Sos Premium</div>
             <div style="color:#5c4a12;font-size:0.82rem;margin-top:2px">${state.premiumPlan === "anual" ? "US$" + PREM.priceYear + "/año" : "US$" + PREM.price + "/mes"} · renovación automática</div>
           </div>
           <div style="text-align:right">
@@ -803,9 +807,12 @@
   screens.pasaporte = function () {
     const nombre = fieldValue("identity.name") || "viajera";
     const activos = state.grants.filter((g) => g.activo).length;
+    const temaOscuro = (document.documentElement.dataset.theme ||
+      (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")) === "dark";
 
     return view(`
-      ${sHead("Hola, " + String(nombre).split(" ")[0])}
+      ${sHead("Hola, " + String(nombre).split(" ")[0], null,
+        `<button class="icon-btn" data-action="toggle-theme" aria-label="Cambiar tema" title="Modo claro / oscuro">${icon(temaOscuro ? "sun" : "moon")}</button>`)}
       <div class="card card--brand">
         <div class="eyebrow" style="color:rgba(255,255,255,0.9)">Tu contexto está activo</div>
         <div style="font-size:1.05rem;font-weight:700;margin:4px 0 2px">Listo para tu próxima reserva</div>
@@ -814,7 +821,7 @@
 
       <div class="card" data-go="contexto" role="button" tabindex="0">
         <div class="row">
-          <div class="avatar">🪪</div>
+          <div class="avatar">${icon("idcard")}</div>
           <div class="grow"><b>Ver y editar mi contexto</b><div class="muted">Tus ${state.passport.length} categorías de hospedaje</div></div>
           <div style="color:var(--txt-mute)">›</div>
         </div>
@@ -822,7 +829,7 @@
 
       <div class="card" data-go="reservas" role="button" tabindex="0">
         <div class="row">
-          <div class="avatar">🛎️</div>
+          <div class="avatar">${icon("bell")}</div>
           <div class="grow"><b>Mis reservas</b><div class="muted">En curso y finalizadas</div></div>
           <div style="color:var(--txt-mute)">›</div>
         </div>
@@ -830,7 +837,7 @@
 
       <div class="card ${isPremium() ? "" : "card--premium"}" data-go="premium" role="button" tabindex="0"${isPremium() ? "" : ' style="border:none"'}>
         <div class="row">
-          <div class="avatar" style="background:${isPremium() ? "var(--surface-2)" : "rgba(255,255,255,.18)"}">⭐</div>
+          <div class="avatar" style="background:${isPremium() ? "var(--surface-2)" : "rgba(255,255,255,.18)"};color:${isPremium() ? "var(--warn)" : "#3a2c00"}">${icon("star")}</div>
           <div class="grow">
             <b${isPremium() ? "" : ' style="color:#3a2c00"'}>ContextLayer Premium</b>
             <div class="muted"${isPremium() ? "" : ' style="color:#5c4a12"'}>${isPremium() ? state.points.toLocaleString("es") + " puntos · membresías activas" : "US$10/mes o US$100/año · descuentos y puntos"}</div>
@@ -841,7 +848,7 @@
 
       <div class="card" data-go="permisos" role="button" tabindex="0">
         <div class="row">
-          <div class="avatar">🔐</div>
+          <div class="avatar">${icon("lock")}</div>
           <div class="grow"><b>Permisos</b><div class="muted">Quién ve tu contexto y hasta cuándo</div></div>
           <div style="color:var(--txt-mute)">›</div>
         </div>
@@ -850,7 +857,7 @@
       <div class="section-label">Velo en acción</div>
       <div class="card card--soft" data-go="agente" role="button" tabindex="0">
         <div class="row">
-          <div class="avatar">✨</div>
+          <div class="avatar">${icon("sparkles")}</div>
           <div class="grow"><b>Buscar con tu agente</b><div class="muted">Aria busca alojamiento o experiencias con tu contexto</div></div>
           <div style="color:var(--txt-mute)">›</div>
         </div>
@@ -866,7 +873,7 @@
       <div class="card">
         <div class="row row--between">
           <div class="row" style="gap:10px">
-            <div class="avatar" style="width:38px;height:38px;font-size:1.1rem">${esc(dom.icono)}</div>
+            <div class="avatar" style="width:38px;height:38px">${domIcon(dom)}</div>
             <b>${esc(dom.dominio)}</b>
           </div>
           <button class="btn btn--dark btn--sm" data-action="edit-dom" data-dom="${dom.id}">Editar</button>
@@ -890,7 +897,7 @@
       <p class="muted" style="margin-bottom:12px">Esta información te pertenece. Ninguna app ni hotel la ve sin tu permiso.</p>
       <div class="card card--soft" data-action="start-chat-update" role="button" tabindex="0">
         <div class="row" style="gap:10px">
-          <div class="avatar">💬</div>
+          <div class="avatar">${icon("chat")}</div>
           <div class="grow"><b>Actualizar charlando</b><div class="muted">Contale al agente por texto o voz y ajustá tu contexto</div></div>
           <div style="color:var(--txt-mute)">›</div>
         </div>
@@ -956,7 +963,7 @@
     return view(`
       ${sHead("Actividad")}
       <p class="muted" style="margin-bottom:8px">Cada lectura y cada escritura deja un recibo. Todo es inspeccionable.</p>
-      <div class="card">${items || '<div class="empty"><span class="empty__ico">🧾</span>Todavía no hay actividad.</div>'}</div>
+      <div class="card">${items || '<div class="empty"><span class="empty__ico">' + icon("receipt", "ico--xl") + '</span>Todavía no hay actividad.</div>'}</div>
     `);
   };
 
@@ -975,7 +982,7 @@
               <div><b>${esc(g.solicitante)}</b><div class="muted">${esc(g.proposito)}</div></div>
             </div>
             <label class="switch">
-              <input type="checkbox" ${g.activo ? "checked" : ""} data-action="toggle-grant" data-grant="${g.id}" />
+              <input type="checkbox" ${g.activo ? "checked" : ""} data-action="toggle-grant" data-grant="${g.id}" aria-label="Acceso de ${esc(g.solicitante)}" />
               <span class="switch__track"></span>
             </label>
           </div>
@@ -997,7 +1004,7 @@
     return view(`
       ${sHead("Permisos", "pasaporte")}
       <p class="muted" style="margin-bottom:14px">Quién tiene acceso a tu contexto, con qué alcance y hasta cuándo. Revocás de un toque.</p>
-      ${items || '<div class="empty"><span class="empty__ico">🔐</span>Todavía no diste ningún permiso.</div>'}
+      ${items || '<div class="empty"><span class="empty__ico">' + icon("lock", "ico--xl") + '</span>Todavía no diste ningún permiso.</div>'}
     `);
   };
 
@@ -1005,7 +1012,7 @@
   function reservaCard(r) {
     const app = appById(r.appId);
     const enCurso = r.estado === "en_curso";
-    const tipoChip = r.esTour ? "🎟️ Experiencia" : "🛎️ Alojamiento";
+    const tipoChip = r.esTour ? icon("ticket", "ico--sm") + " Experiencia" : icon("bell", "ico--sm") + " Alojamiento";
     const meta = r.esTour
       ? `${esc(r.fechas)} · ${esc(r.duracion || "experiencia")}`
       : `${esc(r.fechas)} · ${r.noches} noche${r.noches === 1 ? "" : "s"}`;
@@ -1038,7 +1045,7 @@
     const finalizadas = state.reservas.filter((r) => r.estado === "finalizada");
     const vacio =
       state.reservas.length === 0
-        ? `<div class="empty"><span class="empty__ico">🛎️</span>Todavía no tenés reservas.<br/>Buscá alojamiento con Aria para empezar.</div>`
+        ? `<div class="empty"><span class="empty__ico">${icon("bell", "ico--xl")}</span>Todavía no tenés reservas.<br/>Buscá alojamiento con Aria para empezar.</div>`
         : "";
     return view(`
       ${sHead("Mis reservas", "pasaporte")}
@@ -1062,19 +1069,19 @@
       ${sHead("Buscar con Aria", "pasaporte")}
       <div class="card">
         <div class="row" style="gap:10px">
-          <div class="avatar">🤖</div>
+          <div class="avatar">${icon("bot")}</div>
           <div><b>Aria</b><div class="muted">Busca en tus apps conectadas con tu contexto</div></div>
         </div>
       </div>
       <div class="section-label">¿Qué buscás?</div>
       <div class="seg">
-        <button class="seg__btn ${!isTour ? "is-active" : ""}" data-action="search-type" data-type="stay">🛏️ Alojamiento</button>
-        <button class="seg__btn ${isTour ? "is-active" : ""}" data-action="search-type" data-type="tour">🎟️ Experiencia</button>
+        <button class="seg__btn ${!isTour ? "is-active" : ""}" data-action="search-type" data-type="stay">${icon("hotel")} Alojamiento</button>
+        <button class="seg__btn ${isTour ? "is-active" : ""}" data-action="search-type" data-type="tour">${icon("ticket")} Experiencia</button>
       </div>
       <textarea class="textarea" id="pedido-input" placeholder="${esc(placeholder)}">${esc(state.pedido)}</textarea>
       <div class="card card--soft" style="margin-top:12px">
         <div class="row" style="gap:8px;align-items:flex-start">
-          <span>🔐</span>
+          <span style="color:var(--brand)">${icon("lock")}</span>
           <div class="muted">Aria leerá, con tu permiso: <b style="color:var(--txt-dim)">${esc(hint)}</b>. Cada acceso deja recibo.</div>
         </div>
       </div>
@@ -1272,15 +1279,53 @@
     return scored.slice(0, limit || 2).map((x) => x.tr);
   }
 
+  /* ---- Micro-encuesta 1-tap tras la primera reserva ---- */
+  const FB_TAGS = ["Rápido", "Confuso", "Me dio confianza", "Pediría más control"];
+
+  function feedbackSheetHTML() {
+    const caras = ["😖", "😕", "😐", "🙂", "🤩"];
+    const fb = state._fb || { score: 0, tags: [] };
+    return `
+      <h2 class="title" style="text-align:center">¿Qué te pareció reservar así?</h2>
+      <p class="muted" style="text-align:center;margin-bottom:14px">Tu opinión mejora el prototipo. Es anónima.</p>
+      <div class="fb-faces">
+        ${caras.map((c, i) => `<button class="fb-face ${fb.score === i + 1 ? "is-on" : ""}" data-action="fb-score" data-v="${i + 1}" aria-label="Puntaje ${i + 1} de 5">${c}</button>`).join("")}
+      </div>
+      ${fb.score
+        ? `<div class="chip-wrap" style="justify-content:center;margin:12px 0 2px">
+             ${FB_TAGS.map((t) => `<button class="chip fb-tag ${fb.tags.indexOf(t) >= 0 ? "chip--ok" : ""}" data-action="fb-tag" data-t="${esc(t)}">${esc(t)}</button>`).join("")}
+           </div>
+           <div class="btn-stack" style="margin-top:12px">
+             <button class="btn" data-action="fb-send">Enviar</button>
+           </div>`
+        : `<div class="btn-stack" style="margin-top:12px">
+             <button class="btn btn--ghost" data-action="close-sheet">Ahora no</button>
+           </div>`}
+    `;
+  }
+
+  function refreshFeedbackSheet() {
+    const panel = document.querySelector(".sheet__panel");
+    if (panel) panel.innerHTML = '<div class="sheet__grip"></div>' + feedbackSheetHTML();
+  }
+
+  function openFeedbackSheet() {
+    if (state.screen !== "reservaOk" || state.feedbackGiven) return;
+    state._fb = { score: 0, tags: [] };
+    openSheet(feedbackSheetHTML());
+  }
+
   screens.reservaOk = function () {
     const o = findOffer(state.selectedOptionId) || {};
     const app = appById(o.sourceAppId);
     const esTour = !!o.esTour;
 
-    // Celebración: confetti al llegar desde una reserva recién confirmada.
+    // Celebración: confetti al llegar desde una reserva recién confirmada,
+    // y una única micro-encuesta de feedback un momento después.
     if (state._celebrate && !state._preview) {
       state._celebrate = false;
       setTimeout(confetti, 350);
+      if (!state.feedbackGiven) setTimeout(openFeedbackSheet, 1900);
     }
 
     // Cross-sell: tras reservar un alojamiento, sugerir experiencias en el MISMO
@@ -1331,7 +1376,7 @@
       ${puntosMsg}
       <div class="card card--soft" style="text-align:left">
         <div class="row" style="gap:10px">
-          <span>🔐</span>
+          <span style="color:var(--brand)">${icon("lock")}</span>
           <div class="muted">${esc(app ? app.nombre : "La app")} tiene acceso a tu contexto según lo que autorizaste. Lo ves y lo revocás cuando quieras desde <b style="color:var(--txt-dim)">Permisos</b>. Quedó registrado en Actividad.</div>
         </div>
       </div>
@@ -1377,7 +1422,7 @@
         <button data-action="chat-skip" style="border-style:dashed">Prefiero no decirlo</button>
       </div>
       <div class="muted" style="text-align:center;font-size:0.76rem;margin:2px 0 6px">
-        Elegí una opción o escribí/dictá tu propia respuesta. 🎤
+        Elegí una opción o escribí/dictá tu propia respuesta.
       </div>`;
   }
 
@@ -1423,16 +1468,16 @@
       ${resumen}
       ${state.guidedComplete
         ? `<div class="btn-stack">
-             <button class="btn" data-action="plan-trip">✨ Planifiquemos el viaje</button>
+             <button class="btn" data-action="plan-trip">${icon("sparkles")} Planifiquemos el viaje</button>
              <button class="btn btn--ghost" data-action="skip-to-dashboard">Omitir por ahora</button>
            </div>`
         : state.chatDone
           ? `<div class="btn-stack"><button class="btn" data-action="chat-finish">Listo, ver mi contexto</button></div>`
           : ""}
       <div class="chatbar">
-        <button class="icon-btn mic-btn" data-action="mic" aria-label="Hablar" title="Dictar por voz">🎤</button>
+        <button class="icon-btn mic-btn" data-action="mic" aria-label="Hablar" title="Dictar por voz">${icon("mic")}</button>
         <textarea class="textarea" id="chat-input" rows="1" placeholder="Escribí o tocá el micrófono…"></textarea>
-        <button class="icon-btn icon-btn--send" data-action="chat-send" aria-label="Enviar">➤</button>
+        <button class="icon-btn icon-btn--send" data-action="chat-send" aria-label="Enviar">${icon("send")}</button>
       </div>
     `);
   };
@@ -1741,8 +1786,12 @@
     const app = item && item.appId ? appById(item.appId) : null;
     if (app) return brandBadge(app, size || 44);
     const s = size || 44;
-    return `<div class="avatar" style="width:${s}px;height:${s}px">${esc(item && item.icono ? item.icono : "🔒")}</div>`;
+    const inner = item && item.iconName ? icon(item.iconName) : esc(item && item.icono ? item.icono : "🔒");
+    return `<div class="avatar" style="width:${s}px;height:${s}px">${inner}</div>`;
   }
+
+  // Ícono de un dominio del pasaporte: SVG si tiene iconName, si no el emoji.
+  const domIcon = (dom) => (dom.iconName ? icon(dom.iconName) : esc(dom.icono));
 
   // Insignia de marca (monograma sobre el color de la empresa).
   function brandBadge(a, size) {
@@ -1828,7 +1877,7 @@
         </div>
         <div class="card card--soft">
           <div class="row" style="gap:8px;align-items:flex-start">
-            <span>🔐</span>
+            <span style="color:var(--brand)">${icon("lock")}</span>
             <div class="muted">${esc(a.nombre)} ya tiene tu contexto vía ContextLayer:<div class="chip-wrap" style="margin-top:6px">${compartido}</div></div>
           </div>
         </div>
@@ -1875,7 +1924,7 @@
           </div>
           <div class="card card--soft">
             <div class="row" style="gap:8px;align-items:flex-start">
-              <span>🔐</span>
+              <span style="color:var(--brand)">${icon("lock")}</span>
               <div class="muted">${esc(a.nombre)} está usando tu contexto: <div class="chip-wrap" style="margin-top:6px">${compartido}</div></div>
             </div>
           </div>
@@ -1943,7 +1992,7 @@
             <div class="field-grant__val">${esc(fieldValue(k))}</div>
           </div>
           <label class="switch">
-            <input type="checkbox" ${on ? "checked" : ""} data-action="toggle-sso-field" data-key="${esc(k)}" />
+            <input type="checkbox" ${on ? "checked" : ""} data-action="toggle-sso-field" data-key="${esc(k)}" aria-label="Compartir ${esc(fieldLabel(k))}" />
             <span class="switch__track"></span>
           </label>
         </div>`;
@@ -1963,7 +2012,7 @@
         </div>
 
         <div class="sso__acct">
-          <div class="avatar" style="width:38px;height:38px;font-size:1rem">👤</div>
+          <div class="avatar" style="width:38px;height:38px">${icon("user")}</div>
           <div class="grow"><b>${esc(fieldValue("identity.name"))}</b><div class="muted">Tu cuenta ContextLayer</div></div>
         </div>
 
@@ -2274,6 +2323,7 @@
           tipo: "read",
           solicitante: "Aria · tu agente de viaje",
           icono: "🤖",
+          iconName: "bot",
           detalle: 'Leyó tu contexto para: "' + state.pedido + '"',
           fields:
             state.searchType === "tour"
@@ -2470,6 +2520,42 @@
         closeSheet();
         break;
 
+      case "toggle-theme": {
+        const actual = document.documentElement.dataset.theme ||
+          (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+        const proximo = actual === "dark" ? "light" : "dark";
+        document.documentElement.dataset.theme = proximo;
+        try { localStorage.setItem("cl_theme", proximo); } catch (e) {}
+        go(state.screen); // re-dibuja el ícono sol/luna
+        break;
+      }
+
+      /* ---- Micro-feedback post-reserva ---- */
+      case "fb-score":
+        if (!state._fb) state._fb = { score: 0, tags: [] };
+        state._fb.score = Number(el.dataset.v);
+        refreshFeedbackSheet();
+        break;
+      case "fb-tag": {
+        if (!state._fb) break;
+        const t = el.dataset.t;
+        const i = state._fb.tags.indexOf(t);
+        if (i >= 0) state._fb.tags.splice(i, 1);
+        else state._fb.tags.push(t);
+        refreshFeedbackSheet();
+        break;
+      }
+      case "fb-send": {
+        const fb = state._fb || {};
+        if (!fb.score) break;
+        state.feedbackGiven = true;
+        if (window.CLTrack && window.CLTrack.feedback) window.CLTrack.feedback(fb.score, "reserva", fb.tags);
+        closeSheet();
+        buzz();
+        toast("¡Gracias por tu opinión! 💙");
+        break;
+      }
+
     }
   }
 
@@ -2639,6 +2725,13 @@
 
   /* ---------- Arranque ---------- */
   (function boot() {
+    // Íconos SVG de la tabbar (reemplazan los emojis del HTML estático).
+    const TAB_ICONS = { pasaporte: "idcard", reservas: "bell", actividad: "receipt", permisos: "lock" };
+    tabbar.querySelectorAll(".tabbar__btn").forEach((b) => {
+      const ic = b.querySelector(".tabbar__ico");
+      if (ic && window.icon) ic.innerHTML = icon(TAB_ICONS[b.dataset.nav] || "sparkles");
+    });
+
     const qs = new URLSearchParams(location.search);
     const previewScreen = qs.get("preview");
     if (previewScreen) return bootPreview(previewScreen, qs);

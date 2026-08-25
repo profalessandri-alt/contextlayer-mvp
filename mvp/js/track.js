@@ -370,9 +370,23 @@
       });
     },
 
-    // Evento genérico (milestones, chat_msg, feedback…). Sin coordenadas.
+    // Evento genérico (milestones, chat_msg…). Sin coordenadas.
     ev(type, props) { record(type, props || {}); },
     milestone(name, props) { record("milestone", Object.assign({ name }, props || {})); },
+
+    // Feedback 1-tap: queda como evento Y como fila propia (tabla feedback
+    // en remoto / cl_track_local_feedback en local) para listarlo fácil.
+    feedback(score, context, tags) {
+      record("feedback", { score, context: cut(context, 60), tags: tags || [] });
+      const row = { session_id: T.sid, score, context: cut(context, 60), tags: tags || [] };
+      if (T.mode === "remote") {
+        sbInsert("feedback", [row]).catch(() => {});
+      } else if (T.mode === "local") {
+        const all = readJson("cl_track_local_feedback", []);
+        all.push(Object.assign({ created_at: new Date().toISOString() }, row));
+        lsSet("cl_track_local_feedback", JSON.stringify(all.slice(-300)));
+      }
+    },
     mode() { return T.mode; },
   };
 
