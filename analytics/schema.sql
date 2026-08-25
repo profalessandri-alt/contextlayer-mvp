@@ -106,6 +106,13 @@ revoke update, delete, truncate on public.sessions, public.events, public.feedba
 revoke select on public.sessions, public.events, public.feedback from anon;
 revoke all on public.admins from anon, authenticated;
 
+-- PERO: los inserts idempotentes del tracker usan ON CONFLICT, y Postgres
+-- exige privilegio SELECT sobre las columnas del conflict target. Se concede
+-- SOLO sobre esas columnas; leer filas sigue bloqueado por RLS (un SELECT de
+-- anon devuelve cero filas).
+grant select (id) on public.sessions to anon;
+grant select (session_id, seq) on public.events to anon;
+
 -- ------------------------------------------------ RPCs de agregación -------
 -- Opcionales: el dashboard agrega client-side a escala de pruebas de usuario;
 -- estas funciones (SECURITY INVOKER: la RLS decide) quedan como atajo.
