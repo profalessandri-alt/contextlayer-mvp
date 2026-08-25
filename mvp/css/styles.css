@@ -747,3 +747,24 @@ h2.title { font-size: 1.25rem; margin: 4px 0 6px; }
   border-radius: 50%;
   background: var(--brand-2);
 }
+
+/* ============================================================================
+ * Modo preview (iframes del dashboard /admin): la pantalla se renderiza a
+ * altura completa del contenido, congelada y sin interacción.
+ * ==========================================================================*/
+body.preview-mode {
+  display: block;
+  padding: 0;
+  background: var(--bg);
+}
+.preview-mode .device {
+  height: auto !important;
+  min-height: 0 !important;
+  max-width: none;
+  border-radius: 0;
+  box-shadow: none;
+  pointer-events: none;
+}
+.preview-mode .screen {
+  overflow: visible;
+}

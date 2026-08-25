@@ -877,6 +877,11 @@
         </div>
       </div>
     `);
+    // En preview la pantalla queda congelada, con todos los pasos visibles.
+    if (state._preview) {
+      node.querySelectorAll(".thinking__step").forEach((el) => el.classList.add("show"));
+      return node;
+    }
     // Token de esta corrida: si el usuario navega antes de terminar, no lo
     // teletransportamos a resultados.
     const run = (state._thinkingRun = {});
@@ -2137,9 +2142,72 @@
 
 
 
+  /* ---------- Modo preview (iframes del dashboard /admin) ---------- */
+  // /mvp/?preview=<pantalla>[&app=<appId>][&type=stay|tour] renderiza esa
+  // pantalla con datos demo, congelada (sin timers ni tracking), y le avisa
+  // al padre las dimensiones para superponer heatmaps y el replay.
+  function applyPreviewFixtures(scr, app, type) {
+    if (type === "stay" || type === "tour") state.searchType = type;
+    if (scr === "thirdApp" || scr === "sso") {
+      state.currentAppId = appById(app) ? app : "app-airbnb";
+      if (scr === "sso") state.ssoDraft = null;
+    }
+    if (scr === "reservaOk") state.selectedOptionId = "opt-1";
+    if (scr === "editDom") state._editDomId = "preferencias";
+    if (scr === "onboarding") state.onboardingStep = 1;
+    if (scr === "chatload") {
+      state.guideStep = 2;
+      state.chatDone = false;
+      state.guidedComplete = false;
+      state.chat = [
+        { role: "agent", text: "¡Hola! Soy tu agente. Te hago unas preguntas rápidas para armar tu contexto." },
+        { role: "agent", text: GUIDE[0].q },
+        { role: "user", text: "Valentina" },
+        { role: "agent", text: GUIDE[1].q },
+      ];
+    }
+  }
+
+  function postPreviewReady() {
+    requestAnimationFrame(() => {
+      try {
+        parent.postMessage({
+          cl: "preview-ready",
+          screen: state.screen,
+          docH: screenEl.scrollHeight,
+          screenTop: screenEl.getBoundingClientRect().top + window.scrollY,
+          deviceW: document.querySelector(".device").clientWidth,
+          docTotal: document.documentElement.scrollHeight,
+        }, "*");
+      } catch (e) {}
+    });
+  }
+
+  function bootPreview(scr, qs) {
+    state._preview = true;
+    document.body.classList.add("preview-mode");
+    loadDemoUser();
+    state.onboarded = true;
+    applyPreviewFixtures(scr, qs.get("app"), qs.get("type"));
+    state.screen = screens[scr] ? scr : "pasaporte";
+    render();
+    postPreviewReady();
+    window.addEventListener("message", (e) => {
+      const d = e.data || {};
+      if (d.cl === "preview-go" && screens[d.screen]) {
+        applyPreviewFixtures(d.screen, d.app, d.type);
+        state.screen = d.screen;
+        render();
+        postPreviewReady();
+      }
+    });
+  }
+
   /* ---------- Arranque ---------- */
   (function boot() {
     const qs = new URLSearchParams(location.search);
+    const previewScreen = qs.get("preview");
+    if (previewScreen) return bootPreview(previewScreen, qs);
     if (qs.get("reset") === "1") {
       // Limpieza entre testers: /mvp/?reset=1
       clearSavedState();
