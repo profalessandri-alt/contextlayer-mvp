@@ -123,7 +123,7 @@
       app_version: cut(T.version, 20),
     };
     if (T.mode === "remote") {
-      sbInsert("sessions", [row], "id")
+      sbInsert("sessions", [row])
         .then((ok) => { if (ok) lsSet(LS.sidNew, "0"); })
         .catch(() => {});
     } else if (T.mode === "local") {
@@ -142,21 +142,26 @@
   }
 
   /* ------------------------------------------------------ envío (remoto) */
-  // Inserción directa en PostgREST. `return=minimal` es obligatorio (la RLS
-  // no permite SELECT) e `ignore-duplicates` hace idempotente el reintento.
-  function sbInsert(table, rows, onConflict) {
-    const qs = onConflict ? "?on_conflict=" + onConflict : "";
-    // Solo apikey: sin Authorization el gateway asume el rol anon, y así
-    // funciona igual con claves legacy (JWT) y nuevas (sb_publishable_...).
-    return fetch(T.url + "/rest/v1/" + table + qs, {
+  // Inserción directa en PostgREST, SIEMPRE como insert plano: la RLS solo
+  // da INSERT a anon, y ON CONFLICT exige permisos extra que no queremos
+  // abrir. La idempotencia sale gratis igual: un duplicado responde 409 por
+  // la unique constraint y se considera entregado.
+  // Solo header apikey (sin Authorization): funciona igual con claves legacy
+  // (JWT) y nuevas (sb_publishable_...).
+  function sbPost(table, rows, keep) {
+    return fetch(T.url + "/rest/v1/" + table, {
       method: "POST",
+      keepalive: !!keep,
       headers: {
         "content-type": "application/json",
         apikey: T.key,
-        prefer: "return=minimal" + (onConflict ? ",resolution=ignore-duplicates" : ""),
+        prefer: "return=minimal",
       },
       body: JSON.stringify(rows),
-    }).then((r) => r.ok || r.status === 409);
+    });
+  }
+  function sbInsert(table, rows) {
+    return sbPost(table, rows).then((r) => r.ok || r.status === 409);
   }
 
   let flushTimer = null;
@@ -177,32 +182,50 @@
     if (!final && now() < T.failUntil) { scheduleFlush(T.failUntil - now() + 100); return; }
     const batch = T.queue.slice(0, BATCH_MAX);
     T.inflight = true;
-    const req = fetch(T.url + "/rest/v1/events?on_conflict=session_id,seq", {
-      method: "POST",
-      // keepalive solo al cerrar (límite 64 KB): los batches normales no lo necesitan.
-      keepalive: !!final,
-      headers: {
-        "content-type": "application/json",
-        apikey: T.key,
-        prefer: "return=minimal,resolution=ignore-duplicates",
-      },
-      body: JSON.stringify(batch),
-    });
-    req.then((r) => {
-      T.inflight = false;
-      if (r.ok || r.status === 409) {
-        // Remover EXACTAMENTE lo enviado (por identidad, no por posición):
-        // mientras el POST volaba pudieron encolarse eventos nuevos.
-        const enviados = new Set(batch.map((e) => e.session_id + "/" + e.seq));
-        T.queue = T.queue.filter((e) => !enviados.has(e.session_id + "/" + e.seq));
-        T.fails = 0;
-        T.failUntil = 0;
-        persistQueue();
-        if (T.queue.length) scheduleFlush(200);
+    // keepalive solo al cerrar (límite 64 KB): los batches normales no lo necesitan.
+    sbPost("events", batch, final).then((r) => {
+      if (r.ok) {
+        deliver(batch);
+      } else if (r.status === 409) {
+        // El lote es atómico: un duplicado tumba el lote entero. Pasa cuando
+        // una respuesta se perdió tras insertarse → reintentar de a uno para
+        // no perder los eventos nuevos mezclados con los ya entregados.
+        drainOneByOne(batch);
       } else {
+        T.inflight = false;
         fail();
       }
-    }).catch((e) => { T.inflight = false; fail(); });
+    }).catch(() => { T.inflight = false; fail(); });
+  }
+
+  // Marca un conjunto de eventos como entregado (por identidad, no por
+  // posición: mientras el POST volaba pudieron encolarse eventos nuevos).
+  function deliver(rows) {
+    const enviados = new Set(rows.map((e) => e.session_id + "/" + e.seq));
+    T.queue = T.queue.filter((e) => !enviados.has(e.session_id + "/" + e.seq));
+    T.inflight = false;
+    T.fails = 0;
+    T.failUntil = 0;
+    persistQueue();
+    if (T.queue.length) scheduleFlush(200);
+  }
+
+  function drainOneByOne(rows) {
+    const uno = (i) => {
+      if (i >= rows.length) { T.inflight = false; persistQueue(); if (T.queue.length) scheduleFlush(200); return; }
+      sbPost("events", [rows[i]]).then((r) => {
+        if (r.ok || r.status === 409) {
+          const k = rows[i].session_id + "/" + rows[i].seq;
+          T.queue = T.queue.filter((e) => e.session_id + "/" + e.seq !== k);
+          uno(i + 1);
+        } else {
+          T.inflight = false;
+          persistQueue();
+          fail();
+        }
+      }).catch(() => { T.inflight = false; persistQueue(); fail(); });
+    };
+    uno(0);
   }
   function fail() {
     T.fails = Math.min(T.fails + 1, 6);
