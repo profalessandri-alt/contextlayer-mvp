@@ -151,16 +151,172 @@
   const domainOfField = (key) =>
     state.passport.find((d) => d.campos.some((c) => c.key === key));
 
+  /* ------------------------------------------------ Persistencia local */
+  // El estado del tester sobrevive al refresh (crítico en pruebas de usuario).
+  const STORE_KEY = "cl_state_v1";
+  const PERSIST_KEYS = [
+    "passport", "grants", "receipts", "reservas", "premium", "premiumPlan",
+    "selectedPlan", "points", "redemptions", "onboarded", "narrative",
+    "narrativeEdited", "appLogged", "pedido", "searchType", "chat", "chatDone",
+    "guideStep", "guidedComplete", "currentAppId", "_editDomId",
+    "selectedOptionId", "openListingId", "perspective",
+  ];
+
+  function saveState() {
+    try {
+      const s = {};
+      PERSIST_KEYS.forEach((k) => (s[k] = state[k]));
+      localStorage.setItem(STORE_KEY, JSON.stringify({ v: 1, t: Date.now(), s }));
+    } catch (e) { /* quota o storage bloqueado: seguimos en memoria */ }
+  }
+  let _saveTimer = null;
+  function saveSoon() {
+    clearTimeout(_saveTimer);
+    _saveTimer = setTimeout(saveState, 300);
+  }
+  function loadState() {
+    try {
+      const d = JSON.parse(localStorage.getItem(STORE_KEY));
+      if (d && d.v === 1 && d.s) {
+        PERSIST_KEYS.forEach((k) => { if (k in d.s) state[k] = d.s[k]; });
+        return true;
+      }
+    } catch (e) {}
+    return false;
+  }
+  function clearSavedState() {
+    try { localStorage.removeItem(STORE_KEY); } catch (e) {}
+  }
+
+  window.addEventListener("pagehide", saveState);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") saveState();
+  });
+
   /* -------------------------------------------------------------- Router */
   const USER_TABS = ["pasaporte", "reservas", "actividad", "permisos"];
 
-  function go(screen) {
-    const mismo = screen === state.screen;
-    state.screen = screen;
-    render();
-    // Re-render de la misma pantalla (ej. elegir plan): el scroll no salta.
-    if (!mismo) screenEl.scrollTop = 0;
+  // Jerarquía de navegación: decide la dirección de la transición.
+  // Mayor lvl = más profundo; los tabs comparten nivel y se ordenan por `tab`.
+  const NAV = {
+    splash: { lvl: 0 }, onboarding: { lvl: 1 }, chatload: { lvl: 1 }, onboardingDone: { lvl: 2 },
+    pasaporte: { lvl: 1, tab: 0 }, reservas: { lvl: 1, tab: 1 }, actividad: { lvl: 1, tab: 2 }, permisos: { lvl: 1, tab: 3 },
+    contexto: { lvl: 2 }, editDom: { lvl: 3 }, premium: { lvl: 2 }, agente: { lvl: 2 },
+    thinking: { lvl: 3 }, resultados: { lvl: 3 }, thirdApp: { lvl: 4 }, sso: { lvl: 5 }, reservaOk: { lvl: 4 },
+  };
+
+  function dirBetween(a, b) {
+    const A = NAV[a] || { lvl: 1 };
+    const B = NAV[b] || { lvl: 1 };
+    if (a === b) return "none";
+    if (A.tab != null && B.tab != null) return B.tab > A.tab ? "tab-fwd" : "tab-back";
+    if (B.lvl > A.lvl) return "fwd";
+    if (B.lvl < A.lvl) return "back";
+    return "fade";
   }
+
+  // Ruta (hash) de cada pantalla; las que necesitan contexto llevan parámetro.
+  function routeFor(screen) {
+    switch (screen) {
+      case "editDom": return "#/editDom/" + encodeURIComponent(state._editDomId || "");
+      case "thirdApp": return "#/thirdApp" + (state.currentAppId ? "/" + encodeURIComponent(state.currentAppId) : "");
+      case "sso": return "#/sso/" + encodeURIComponent(state.currentAppId || "");
+      case "resultados": return "#/resultados/" + state.searchType;
+      default: return "#/" + screen;
+    }
+  }
+
+  // Hash → pantalla, validando parámetros y redirigiendo las transitorias.
+  function resolveRoute(hash) {
+    const parts = String(hash || "").replace(/^#\/?/, "").split("/").filter(Boolean);
+    const screen = parts[0] || "";
+    const arg = parts[1] ? decodeURIComponent(parts[1]) : "";
+    if (!screens[screen]) return state.onboarded ? "pasaporte" : "splash";
+    switch (screen) {
+      case "editDom":
+        if (!state.passport.some((d) => d.id === arg)) return "contexto";
+        state._editDomId = arg;
+        break;
+      case "thirdApp":
+        state.currentAppId = appById(arg) ? arg : null;
+        break;
+      case "sso":
+        if (!appById(arg)) return "thirdApp";
+        state.currentAppId = arg;
+        break;
+      case "resultados":
+        if (arg === "stay" || arg === "tour") state.searchType = arg;
+        break;
+      case "thinking":
+        return "agente"; // pantalla transitoria: no se puede aterrizar en ella
+      case "reservaOk":
+        if (!findOffer(state.selectedOptionId)) return state.onboarded ? "pasaporte" : "splash";
+        break;
+    }
+    return screen;
+  }
+
+  let navIdx = 0;                // índice de la entrada actual del historial
+  const scrollMem = {};          // idx → { route, top } para restaurar scroll
+
+  function navigate(screen, opts = {}) {
+    const desde = state.screen;
+    const mismo = screen === desde;
+    const route = routeFor(screen);
+
+    // Botón ‹ de la app hacia la entrada anterior del historial: usar
+    // history.back() para no apilar entradas duplicadas.
+    if (!opts.pop && !mismo) {
+      const prev = scrollMem[navIdx - 1];
+      if (prev && prev.route === route) {
+        history.back(); // el popstate termina la navegación
+        return;
+      }
+    }
+
+    state._navDir = mismo ? "none" : dirBetween(desde, screen);
+    state.screen = screen;
+
+    // Misma pantalla con otro parámetro (ej. volver al selector de apps):
+    // actualizar la ruta in place, sin apilar historia.
+    if (mismo && !opts.pop && scrollMem[navIdx] && scrollMem[navIdx].route !== route) {
+      history.replaceState({ idx: navIdx }, "", route);
+      scrollMem[navIdx].route = route;
+    }
+
+    if (!opts.pop && !mismo) {
+      if (scrollMem[navIdx]) scrollMem[navIdx].top = screenEl.scrollTop;
+      // Saltar entre tabs reemplaza la entrada: el historial no acumula tabs.
+      const entreTabs = NAV[desde] && NAV[desde].tab != null && NAV[screen] && NAV[screen].tab != null;
+      if (opts.replace || entreTabs) {
+        history.replaceState({ idx: navIdx }, "", route);
+        scrollMem[navIdx] = { route, top: 0 };
+      } else {
+        navIdx++;
+        history.pushState({ idx: navIdx }, "", route);
+        scrollMem[navIdx] = { route, top: 0 };
+        Object.keys(scrollMem).forEach((k) => { if (+k > navIdx) delete scrollMem[k]; });
+      }
+    }
+
+    render();
+    if (!mismo) screenEl.scrollTop = (opts.pop && scrollMem[navIdx] && scrollMem[navIdx].top) || 0;
+    saveSoon();
+  }
+
+  const go = navigate;
+
+  window.addEventListener("popstate", (e) => {
+    if (scrollMem[navIdx]) scrollMem[navIdx].top = screenEl.scrollTop;
+    navIdx = (e.state && e.state.idx) || 0;
+    const destino = resolveRoute(location.hash);
+    const route = routeFor(destino);
+    // Normalizar la URL si la ruta pedida redirigió (ej. #/thinking → agente)
+    // o si el hash fue editado a mano.
+    if (location.hash !== route) history.replaceState({ idx: navIdx }, "", route);
+    if (!scrollMem[navIdx]) scrollMem[navIdx] = { route, top: 0 };
+    navigate(destino, { pop: true });
+  });
 
   function view(html) {
     const wrap = document.createElement("div");
@@ -198,6 +354,7 @@
 
   /* ---------- Splash ---------- */
   screens.splash = function () {
+    const nombre = state.onboarded ? String(fieldValue("identity.name") || "").split(" ")[0] : "";
     return view(`
       <div class="splash">
         <div class="splash__hero">
@@ -222,11 +379,15 @@
           </div>
         </div>
         <div class="btn-stack">
-          <button class="btn" data-action="start-chatload">💬 Armar mi contexto charlando</button>
-          <button class="btn btn--ghost" data-action="start-onboarding">Prefiero un formulario</button>
-          <button class="btn btn--ghost" data-action="load-demo">Explorar con datos de ejemplo</button>
+          ${state.onboarded
+            ? `<button class="btn" data-action="resume">Continuar${nombre ? " como " + esc(nombre) : ""}</button>
+               <button class="btn btn--ghost" data-action="start-chatload">💬 Armar un contexto nuevo</button>
+               <button class="btn btn--ghost" data-action="reset-demo">Empezar de nuevo</button>`
+            : `<button class="btn" data-action="start-chatload">💬 Armar mi contexto charlando</button>
+               <button class="btn btn--ghost" data-action="start-onboarding">Prefiero un formulario</button>
+               <button class="btn btn--ghost" data-action="load-demo">Explorar con datos de ejemplo</button>`}
         </div>
-        <p class="muted" style="text-align:center;margin-top:10px;font-size:0.78rem">¿Solo querés ver cómo funciona? Probá con un perfil de ejemplo.</p>
+        <p class="muted" style="text-align:center;margin-top:10px;font-size:0.78rem">${state.onboarded ? "Tu contexto quedó guardado en este dispositivo." : "¿Solo querés ver cómo funciona? Probá con un perfil de ejemplo."}</p>
       </div>
     `);
   };
@@ -1491,8 +1652,32 @@
     }
   });
 
+  // Toda acción persiste el estado al terminar (aunque haya returns tempranos).
   function handleAction(action, el) {
+    try {
+      doAction(action, el);
+    } finally {
+      saveSoon();
+    }
+  }
+
+  function doAction(action, el) {
     switch (action) {
+      case "resume":
+        go("pasaporte");
+        break;
+      case "reset-demo":
+        clearSavedState();
+        resetEmptyUser();
+        state.onboarded = false;
+        state.chat = [];
+        state.chatDone = false;
+        state.guideStep = 0;
+        state.appLogged = {};
+        state.currentAppId = null;
+        toast("Demo reiniciada");
+        go("splash");
+        break;
       case "start-onboarding":
         resetEmptyUser();
         state.onboardingStep = 0;
@@ -1898,5 +2083,22 @@
 
 
   /* ---------- Arranque ---------- */
-  render();
+  (function boot() {
+    const qs = new URLSearchParams(location.search);
+    if (qs.get("reset") === "1") {
+      // Limpieza entre testers: /mvp/?reset=1
+      clearSavedState();
+      qs.delete("reset");
+      const q = qs.toString();
+      history.replaceState(null, "", location.pathname + (q ? "?" + q : "") + location.hash);
+    } else {
+      loadState();
+    }
+    history.scrollRestoration = "manual";
+    const inicial = resolveRoute(location.hash);
+    state.screen = inicial;
+    history.replaceState({ idx: 0 }, "", routeFor(inicial));
+    scrollMem[0] = { route: routeFor(inicial), top: 0 };
+    render();
+  })();
 })();
