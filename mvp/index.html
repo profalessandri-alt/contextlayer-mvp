@@ -2,25 +2,20 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#0f1226" />
   <title>ContextLayer · Prototipo</title>
-  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-  <meta http-equiv="Pragma" content="no-cache" />
-  <meta http-equiv="Expires" content="0" />
-  <link rel="stylesheet" href="css/styles.css?v=24" />
+  <link rel="icon" href="img/favicon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="img/icon-192.png" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <!-- Tema elegido por el tester, aplicado antes del primer paint (sin flash) -->
+  <script>try { var t = localStorage.getItem("cl_theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
+  <link rel="preload" href="fonts/manrope.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="stylesheet" href="css/styles.css?v=30" />
 </head>
 <body>
   <!-- Marco de teléfono: en desktop se ve como un móvil centrado; en mobile ocupa todo. -->
   <div class="device" role="application" aria-label="Prototipo ContextLayer">
-    <div class="device__notch" aria-hidden="true"></div>
-
-    <!-- Barra de estado simulada -->
-    <header class="statusbar" aria-hidden="true">
-      <span class="statusbar__time">9:41</span>
-      <span class="statusbar__brand">ContextLayer</span>
-      <span class="statusbar__icons">●●● ⛆ ▮</span>
-    </header>
 
     <!-- Contenedor donde app.js inyecta cada pantalla -->
     <main id="screen" class="screen" tabindex="-1"></main>
@@ -42,7 +37,10 @@
     </nav>
   </div>
 
-  <script src="js/data.js?v=24"></script>
-  <script src="js/app.js?v=24"></script>
+  <script src="js/config.js?v=30"></script>
+  <script src="js/icons.js?v=30"></script>
+  <script src="js/data.js?v=30"></script>
+  <script src="js/track.js?v=30"></script>
+  <script src="js/app.js?v=30"></script>
 </body>
 </html>

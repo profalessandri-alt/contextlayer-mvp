@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0f1226" />
+  <title>ContextLayer · Admin</title>
+  <link rel="icon" href="../mvp/img/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="css/admin.css?v=1" />
+</head>
+<body>
+
+  <!-- ---------- Login (solo modo remoto) ---------- -->
+  <div id="login" class="login" hidden>
+    <form class="login__card" id="login-form" autocomplete="on">
+      <div class="login__mark">◈</div>
+      <div class="login__brand">ContextLayer <span>· Admin</span></div>
+      <p class="login__lead">Analítica de las pruebas de usuario. Solo para el equipo.</p>
+      <label class="lfield">
+        <span>Email</span>
+        <input type="email" id="login-email" required autocomplete="username" placeholder="vos@ejemplo.com" />
+      </label>
+      <label class="lfield">
+        <span>Contraseña</span>
+        <input type="password" id="login-pass" required autocomplete="current-password" placeholder="••••••••" />
+      </label>
+      <div class="login__error" id="login-error" hidden></div>
+      <button class="btn btn--primary" type="submit" id="login-btn">Entrar</button>
+      <button class="btn btn--ghost" type="button" id="login-local">Ver datos locales de este navegador</button>
+    </form>
+  </div>
+
+  <!-- ---------- Shell del dashboard ---------- -->
+  <div id="shell" class="shell" hidden>
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar__brand">
+        <span class="sidebar__mark">◈</span>
+        <span class="sidebar__name">ContextLayer <b>Admin</b></span>
+        <button class="sidebar__toggle" id="nav-toggle" aria-label="Menú">☰</button>
+      </div>
+      <nav class="sidebar__nav" id="nav"><!-- app.js pinta los links --></nav>
+      <div class="sidebar__foot" id="sidebar-foot"><!-- modo + logout --></div>
+    </aside>
+
+    <div class="main">
+      <header class="topbar">
+        <div class="topbar__title" id="view-title">Resumen</div>
+        <div class="topbar__filters">
+          <div class="seg" id="range-seg" role="group" aria-label="Rango de fechas">
+            <button data-range="today">Hoy</button>
+            <button data-range="7d">7 días</button>
+            <button data-range="30d">30 días</button>
+            <button data-range="all" class="is-on">Todo</button>
+          </div>
+          <select id="segment-sel" class="sel" aria-label="Segmento por dispositivo">
+            <option value="all">Todos los dispositivos</option>
+            <option value="mobile">📱 Mobile</option>
+            <option value="tablet">📲 Tablet</option>
+            <option value="desktop">🖥️ Desktop</option>
+          </select>
+        </div>
+      </header>
+
+      <div id="banner" class="banner" hidden></div>
+      <main id="view" class="view" aria-live="polite">
+        <div class="loading">Cargando…</div>
+      </main>
+    </div>
+  </div>
+
+  <!-- Scripts clásicos, en orden: config → cliente → datos → agregación → gráficos → vistas → app -->
+  <script src="../mvp/js/config.js"></script>
+  <script src="js/sb.js?v=1"></script>
+  <script src="js/provider.js?v=1"></script>
+  <script src="js/agg.js?v=1"></script>
+  <script src="js/charts.js?v=1"></script>
+  <script src="js/heat.js?v=1"></script>
+  <script src="js/views/overview.js?v=1"></script>
+  <script src="js/views/heatmap.js?v=1"></script>
+  <script src="js/views/elements.js?v=1"></script>
+  <script src="js/views/scroll.js?v=1"></script>
+  <script src="js/views/funnels.js?v=1"></script>
+  <script src="js/views/flows.js?v=1"></script>
+  <script src="js/views/sessions.js?v=1"></script>
+  <script src="js/views/live.js?v=1"></script>
+  <script src="js/views/features.js?v=1"></script>
+  <script src="js/views/feedback.js?v=1"></script>
+  <script src="js/views/errors.js?v=1"></script>
+  <script src="js/views/export.js?v=1"></script>
+  <script src="js/app.js?v=1"></script>
+</body>
+</html>

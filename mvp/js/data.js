@@ -32,6 +32,7 @@ const CL_DATA = {
       id: "identidad",
       dominio: "Identidad",
       icono: "👤",
+      iconName: "user",
       campos: [
         { key: "identity.name", label: "Nombre", tipo: "text", valor: "Valentina R." },
         { key: "identity.city", label: "Ciudad base", tipo: "text", valor: "Buenos Aires" },
@@ -42,6 +43,7 @@ const CL_DATA = {
       id: "preferencias",
       dominio: "Preferencias de estadía",
       icono: "🏨",
+      iconName: "hotel",
       campos: [
         { key: "stay.type", label: "Tipo de alojamiento", tipo: "select", valor: "Hotel boutique", opciones: ["Hotel boutique", "Hotel de cadena", "Departamento", "Cabaña / retiro"] },
         { key: "stay.ambiance", label: "Ambiente que buscás", tipo: "select", valor: "Tranquilo para trabajar", opciones: ["Tranquilo para trabajar", "Social / con movimiento", "Naturaleza", "Lujo / spa"] },
@@ -52,6 +54,7 @@ const CL_DATA = {
       id: "restricciones",
       dominio: "Restricciones",
       icono: "⛔",
+      iconName: "ban",
       campos: [
         { key: "stay.diet", label: "Restricción de comida", tipo: "select", valor: "No come carne", opciones: ["Sin restricciones", "No come carne", "Vegana", "Celíaca", "Sin lácteos"] },
         { key: "stay.wifi", label: "WiFi", tipo: "select", valor: "Innegociable", opciones: ["Innegociable", "Deseable", "Indistinto"] },
@@ -62,6 +65,7 @@ const CL_DATA = {
       id: "presupuesto",
       dominio: "Presupuesto por noche",
       icono: "💳",
+      iconName: "credit-card",
       campos: [
         { key: "stay.budget.currency", label: "Moneda", tipo: "select", valor: "USD", opciones: ["USD", "ARS", "EUR"] },
         { key: "stay.budget.max", label: "Máximo por noche", tipo: "number", valor: 180 },
@@ -72,6 +76,7 @@ const CL_DATA = {
       id: "grupo",
       dominio: "Grupo y ocasión",
       icono: "🧳",
+      iconName: "luggage",
       campos: [
         { key: "stay.group.people", label: "Personas", tipo: "number", valor: 1 },
         { key: "stay.occasion", label: "Ocasión del viaje", tipo: "select", valor: "Trabajo remoto", opciones: ["Trabajo remoto", "Escapada en pareja", "Familiar", "Con amigos"] },
@@ -87,6 +92,7 @@ const CL_DATA = {
       id: "grant-aria",
       solicitante: "Aria · tu agente de viaje",
       icono: "🤖",
+      iconName: "bot",
       fields: ["stay.type", "stay.ambiance", "stay.diet", "stay.budget.max"],
       proposito: "Buscar alojamiento en tu nombre",
       duracion: "Hasta que lo revoques",
@@ -109,7 +115,7 @@ const CL_DATA = {
    * ----------------------------------------------------------------------*/
   receipts: [
     { tipo: "read", solicitante: "Airbnb", appId: "app-airbnb", icono: "🏠", detalle: "Leyó tu nombre y tipo de alojamiento", fields: ["identity.name", "stay.type"], fecha: "Hoy, 10:22" },
-    { tipo: "write", solicitante: "Aria · tu agente de viaje", icono: "🤖", detalle: "Actualizó tus preferencias de estadía (con tu ok)", fields: ["stay.ambiance"], fecha: "Ayer, 19:05" },
+    { tipo: "write", solicitante: "Aria · tu agente de viaje", icono: "🤖", iconName: "bot", detalle: "Actualizó tus preferencias de estadía (con tu ok)", fields: ["stay.ambiance"], fecha: "Ayer, 19:05" },
     { tipo: "read", solicitante: "Booking.com", appId: "app-booking", icono: "🌐", detalle: "Leyó tu presupuesto por noche", fields: ["stay.budget.max"], fecha: "Hace 3 días" },
   ],
 

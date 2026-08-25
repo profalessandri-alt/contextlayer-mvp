@@ -11,6 +11,10 @@
   const screenEl = document.getElementById("screen");
   const tabbar = document.getElementById("tabbar");
 
+  // Analítica tolerante: si track.js no está, no pasa nada.
+  const track = (t, p) => window.CLTrack && window.CLTrack.ev(t, p);
+  const milestone = (name, p) => window.CLTrack && window.CLTrack.milestone(name, p);
+
   /* -------------------------------------------------------------- Utils */
   const esc = (s) =>
     String(s == null ? "" : s)
@@ -26,12 +30,110 @@
     if (!t) {
       t = document.createElement("div");
       t.className = "toast";
+      t.setAttribute("role", "status");
+      t.setAttribute("aria-live", "polite");
       document.querySelector(".device").appendChild(t);
     }
     t.textContent = msg;
     t.classList.add("show");
     clearTimeout(t._timer);
     t._timer = setTimeout(() => t.classList.remove("show"), 2200);
+  }
+
+  // Vibración sutil donde el dispositivo lo soporte (confirmaciones).
+  const buzz = (ms) => { try { navigator.vibrate && navigator.vibrate(ms || 12); } catch (e) {} };
+
+  /* ---- Bottom sheet genérica (confirmaciones, feedback) ---- */
+  function openSheet(html) {
+    closeSheet(true);
+    const wrap = document.createElement("div");
+    wrap.className = "sheet";
+    wrap.innerHTML = `
+      <div class="sheet__backdrop"></div>
+      <div class="sheet__panel" role="dialog" aria-modal="true">
+        <div class="sheet__grip"></div>
+        ${html}
+      </div>`;
+    document.querySelector(".device").appendChild(wrap);
+    requestAnimationFrame(() => wrap.classList.add("is-open"));
+    const onKey = (e) => { if (e.key === "Escape") closeSheet(); };
+    document.addEventListener("keydown", onKey);
+    wrap._cleanup = () => document.removeEventListener("keydown", onKey);
+    wrap.querySelector(".sheet__backdrop").addEventListener("click", () => closeSheet());
+    wrap.addEventListener("click", (e) => {
+      const actEl = e.target.closest("[data-action]");
+      if (actEl) handleAction(actEl.dataset.action, actEl);
+    });
+    return wrap;
+  }
+  function closeSheet(instant) {
+    const s = document.querySelector(".sheet");
+    if (!s) return;
+    if (s._cleanup) s._cleanup();
+    if (instant || reducedMotion()) return s.remove();
+    s.classList.remove("is-open");
+    setTimeout(() => s.remove(), 280);
+  }
+
+  /* ---- Confetti (canvas propio, 1.2 s) ---- */
+  function confetti() {
+    if (reducedMotion()) return;
+    const device = document.querySelector(".device");
+    const c = document.createElement("canvas");
+    c.className = "confetti";
+    c.width = device.clientWidth;
+    c.height = device.clientHeight;
+    device.appendChild(c);
+    const ctx = c.getContext("2d");
+    const colores = ["#5566ff", "#23c3a4", "#ffd76a", "#ef4d63", "#a48fff"];
+    const parts = [];
+    for (let i = 0; i < 46; i++) {
+      parts.push({
+        x: c.width / 2 + (Math.random() - 0.5) * 90,
+        y: c.height * 0.32,
+        vx: (Math.random() - 0.5) * 7,
+        vy: -4 - Math.random() * 6,
+        s: 4 + Math.random() * 5,
+        r: Math.random() * Math.PI,
+        vr: (Math.random() - 0.5) * 0.3,
+        col: colores[i % colores.length],
+      });
+    }
+    const t0 = performance.now();
+    (function tick(now) {
+      const dt = now - t0;
+      ctx.clearRect(0, 0, c.width, c.height);
+      parts.forEach((p) => {
+        p.x += p.vx; p.y += p.vy; p.vy += 0.22; p.r += p.vr;
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.r);
+        ctx.globalAlpha = Math.max(0, 1 - dt / 1200);
+        ctx.fillStyle = p.col;
+        ctx.fillRect(-p.s / 2, -p.s / 2, p.s, p.s * 0.6);
+        ctx.restore();
+      });
+      if (dt < 1200) requestAnimationFrame(tick);
+      else c.remove();
+    })(t0);
+  }
+
+  /* ---- Contador animado (puntos premium) ---- */
+  function animateCounts(root) {
+    if (reducedMotion()) return;
+    root.querySelectorAll("[data-count]").forEach((el) => {
+      const to = Number(el.dataset.count);
+      const from = Number(el.dataset.from);
+      if (isNaN(to) || isNaN(from) || from === to) return;
+      const t0 = performance.now();
+      const dur = 650;
+      (function tick(now) {
+        const k = Math.min(1, (now - t0) / dur);
+        const e = 1 - Math.pow(1 - k, 3); // easeOutCubic
+        el.textContent = Math.round(from + (to - from) * e).toLocaleString("es");
+        if (k < 1) requestAnimationFrame(tick);
+      })(t0);
+    });
   }
 
   /* -------------------------------------------------------------- Estado */
@@ -71,6 +173,57 @@
   // Busca una oferta por id, sea alojamiento (opciones) o experiencia (tours).
   const findOffer = (id) =>
     D.opciones.find((o) => o.id === id) || D.tours.find((o) => o.id === id) || null;
+
+  /* ---- Validación inline de los pasos del formulario ---- */
+  function validateDom(dom) {
+    if (!dom) return null;
+    for (const f of dom.campos) {
+      if (f.key === "identity.name" && String(f.valor || "").trim() === "") {
+        return { key: f.key, msg: "Contanos tu nombre para personalizar la experiencia." };
+      }
+      if (f.key === "stay.budget.max") {
+        const n = Number(f.valor);
+        if (f.valor === "" || isNaN(n) || n < 10 || n > 100000) {
+          return { key: f.key, msg: "Ingresá tu presupuesto por noche (entre 10 y 100.000)." };
+        }
+      } else if (f.tipo === "number" && f.valor !== "" && f.valor != null) {
+        const n = Number(f.valor);
+        if (isNaN(n) || n <= 0 || n > 100000) return { key: f.key, msg: "Ingresá un número válido." };
+      }
+    }
+    return null;
+  }
+
+  function markFieldError(key, msg) {
+    const input = screenEl.querySelector('[data-key="' + key + '"]');
+    if (!input) return toast(msg);
+    const field = input.closest(".field");
+    if (field) {
+      field.classList.add("field--error");
+      let m = field.querySelector(".field__msg");
+      if (!m) {
+        m = document.createElement("div");
+        m.className = "field__msg";
+        field.appendChild(m);
+      }
+      m.textContent = msg;
+      input.addEventListener("input", () => {
+        field.classList.remove("field--error");
+        const mm = field.querySelector(".field__msg");
+        if (mm) mm.remove();
+      }, { once: true });
+    }
+    input.focus();
+  }
+
+  // Al armar por formulario, los select vacíos toman su primera opción por
+  // defecto (se aplica al entrar a cada paso, nunca durante el render).
+  function defaultSelects(dom) {
+    if (!dom) return;
+    dom.campos.forEach((f) => {
+      if (f.tipo === "select" && (f.valor === "" || f.valor == null)) f.valor = f.opciones[0];
+    });
+  }
 
   // Pasaporte vacío (para armarlo desde cero) vs. de ejemplo (demo).
   function emptyPassportData() {
@@ -126,12 +279,6 @@
     { key: "stay.budget.max", q: "¿Cuál es tu presupuesto máximo por noche en USD?" },
     { key: "stay.activities", q: "Por último, ¿qué actividades disfrutás? Enoturismo, aventura, cultural o gastronómico." },
   ];
-  function setPerspectiveButtons(p) {
-    document.querySelectorAll(".perspective__btn").forEach((b) =>
-      b.classList.toggle("is-active", b.dataset.persp === p)
-    );
-  }
-
   /* ---- Helpers de pasaporte (keys punteadas) ---- */
   function findField(key) {
     for (const dom of state.passport) {
@@ -148,14 +295,207 @@
   const domainOfField = (key) =>
     state.passport.find((d) => d.campos.some((c) => c.key === key));
 
+  /* ------------------------------------------------ Persistencia local */
+  // El estado del tester sobrevive al refresh (crítico en pruebas de usuario).
+  const STORE_KEY = "cl_state_v1";
+  const PERSIST_KEYS = [
+    "passport", "grants", "receipts", "reservas", "premium", "premiumPlan",
+    "selectedPlan", "points", "redemptions", "onboarded", "narrative",
+    "narrativeEdited", "appLogged", "pedido", "searchType", "chat", "chatDone",
+    "guideStep", "guidedComplete", "currentAppId", "_editDomId",
+    "selectedOptionId", "openListingId", "perspective", "feedbackGiven",
+    "onboardingStep",
+  ];
+
+  function saveState() {
+    try {
+      const s = {};
+      PERSIST_KEYS.forEach((k) => (s[k] = state[k]));
+      // Las burbujas de "escribiendo…" son efímeras: no se persisten.
+      if (Array.isArray(s.chat)) s.chat = s.chat.filter((m) => !m.typing);
+      localStorage.setItem(STORE_KEY, JSON.stringify({ v: 1, t: Date.now(), s }));
+    } catch (e) { /* quota o storage bloqueado: seguimos en memoria */ }
+  }
+  let _saveTimer = null;
+  function saveSoon() {
+    clearTimeout(_saveTimer);
+    _saveTimer = setTimeout(saveState, 300);
+  }
+  function loadState() {
+    try {
+      const d = JSON.parse(localStorage.getItem(STORE_KEY));
+      if (d && d.v === 1 && d.s) {
+        PERSIST_KEYS.forEach((k) => { if (k in d.s) state[k] = d.s[k]; });
+        return true;
+      }
+    } catch (e) {}
+    return false;
+  }
+  function clearSavedState() {
+    try { localStorage.removeItem(STORE_KEY); } catch (e) {}
+  }
+
+  window.addEventListener("pagehide", saveState);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") saveState();
+  });
+
   /* -------------------------------------------------------------- Router */
   const USER_TABS = ["pasaporte", "reservas", "actividad", "permisos"];
 
-  function go(screen) {
-    state.screen = screen;
-    render();
-    screenEl.scrollTop = 0;
+  // Jerarquía de navegación: decide la dirección de la transición.
+  // Mayor lvl = más profundo; los tabs comparten nivel y se ordenan por `tab`.
+  const NAV = {
+    splash: { lvl: 0 }, onboarding: { lvl: 1 }, chatload: { lvl: 1 }, onboardingDone: { lvl: 2 },
+    pasaporte: { lvl: 1, tab: 0 }, reservas: { lvl: 1, tab: 1 }, actividad: { lvl: 1, tab: 2 }, permisos: { lvl: 1, tab: 3 },
+    contexto: { lvl: 2 }, editDom: { lvl: 3 }, premium: { lvl: 2 }, agente: { lvl: 2 },
+    thinking: { lvl: 3 }, resultados: { lvl: 3 }, thirdApp: { lvl: 4 }, sso: { lvl: 5 }, reservaOk: { lvl: 4 },
+  };
+
+  function dirBetween(a, b) {
+    const A = NAV[a] || { lvl: 1 };
+    const B = NAV[b] || { lvl: 1 };
+    if (a === b) return "none";
+    // La hoja de consentimiento SSO entra/sale como bottom sheet.
+    if (b === "sso") return "sheet";
+    if (a === "sso") return "unsheet";
+    if (A.tab != null && B.tab != null) return B.tab > A.tab ? "tab-fwd" : "tab-back";
+    if (B.lvl > A.lvl) return "fwd";
+    if (B.lvl < A.lvl) return "back";
+    return "fade";
   }
+
+  // Ruta (hash) de cada pantalla; las que necesitan contexto llevan parámetro.
+  function routeFor(screen) {
+    switch (screen) {
+      case "editDom": return "#/editDom/" + encodeURIComponent(state._editDomId || "");
+      case "thirdApp": return "#/thirdApp" + (state.currentAppId ? "/" + encodeURIComponent(state.currentAppId) : "");
+      case "sso": return "#/sso/" + encodeURIComponent(state.currentAppId || "");
+      case "resultados": return "#/resultados/" + state.searchType;
+      default: return "#/" + screen;
+    }
+  }
+
+  // Hash → pantalla, validando parámetros y redirigiendo las transitorias.
+  function resolveRoute(hash) {
+    const parts = String(hash || "").replace(/^#\/?/, "").split("/").filter(Boolean);
+    const screen = parts[0] || "";
+    const arg = parts[1] ? decodeURIComponent(parts[1]) : "";
+    if (!screens[screen]) return state.onboarded ? "pasaporte" : "splash";
+    switch (screen) {
+      case "editDom":
+        if (!state.passport.some((d) => d.id === arg)) return "contexto";
+        state._editDomId = arg;
+        break;
+      case "onboarding":
+        // Deep link / refresh a mitad del formulario: retomar el paso guardado.
+        state.onboardingStep = Math.min(state.onboardingStep || 0, state.passport.length - 1);
+        defaultSelects(state.passport[state.onboardingStep]);
+        break;
+      case "thirdApp":
+        state.currentAppId = appById(arg) ? arg : null;
+        break;
+      case "sso":
+        if (!appById(arg)) return "thirdApp";
+        state.currentAppId = arg;
+        break;
+      case "resultados":
+        if (arg === "stay" || arg === "tour") state.searchType = arg;
+        break;
+      case "thinking":
+        return "agente"; // pantalla transitoria: no se puede aterrizar en ella
+      case "reservaOk":
+        if (!findOffer(state.selectedOptionId)) return state.onboarded ? "pasaporte" : "splash";
+        break;
+    }
+    return screen;
+  }
+
+  let navIdx = 0;                // índice de la entrada actual del historial
+  const scrollMem = {};          // idx → { route, top } para restaurar scroll
+  const NAV_EPOCH = Date.now();  // identifica este arranque (ver popstate)
+
+  function navigate(screen, opts = {}) {
+    const desde = state.screen;
+    const mismo = screen === desde;
+    const route = routeFor(screen);
+
+    // Botón ‹ de la app hacia la entrada anterior del historial: usar
+    // history.back() para no apilar entradas duplicadas.
+    if (!opts.pop && !mismo) {
+      const prev = scrollMem[navIdx - 1];
+      if (prev && prev.route === route) {
+        history.back(); // el popstate termina la navegación
+        return;
+      }
+    }
+
+    state._navDir = mismo ? "none" : dirBetween(desde, screen);
+    state.screen = screen;
+    // Volver a cualquier pantalla con tabs restaura la vista de usuario
+    // (evita que la tabbar quede oculta tras un refresh dentro de una app).
+    if (USER_TABS.indexOf(screen) >= 0) state.perspective = "user";
+    if (!mismo) closeSheet(true);
+
+    // Misma pantalla con otro parámetro (ej. volver al selector de apps):
+    // actualizar la ruta in place, sin apilar historia.
+    if (mismo && !opts.pop && scrollMem[navIdx] && scrollMem[navIdx].route !== route) {
+      history.replaceState({ idx: navIdx, epoch: NAV_EPOCH }, "", route);
+      scrollMem[navIdx].route = route;
+    }
+
+    if (!opts.pop && !mismo) {
+      if (scrollMem[navIdx]) scrollMem[navIdx].top = screenEl.scrollTop;
+      // Saltar entre tabs reemplaza la entrada: el historial no acumula tabs.
+      const entreTabs = NAV[desde] && NAV[desde].tab != null && NAV[screen] && NAV[screen].tab != null;
+      if (opts.replace || entreTabs) {
+        history.replaceState({ idx: navIdx, epoch: NAV_EPOCH }, "", route);
+        scrollMem[navIdx] = { route, top: 0 };
+      } else {
+        navIdx++;
+        history.pushState({ idx: navIdx, epoch: NAV_EPOCH }, "", route);
+        scrollMem[navIdx] = { route, top: 0 };
+        Object.keys(scrollMem).forEach((k) => { if (+k > navIdx) delete scrollMem[k]; });
+      }
+    }
+
+    render();
+    if (!mismo) {
+      screenEl.scrollTop = (opts.pop && scrollMem[navIdx] && scrollMem[navIdx].top) || 0;
+      // El fantasma es absolute respecto del contenido: si restauramos scroll,
+      // anclarlo al viewport actual para que la transición se vea bien.
+      const g = screenEl.querySelector(".screen__ghost");
+      if (g && screenEl.scrollTop) {
+        g.style.top = screenEl.scrollTop + "px";
+        g.style.bottom = "auto";
+        g.style.height = screenEl.clientHeight + "px";
+      }
+    }
+    if (!mismo) {
+      document.dispatchEvent(new CustomEvent("cl:nav", {
+        detail: { screen, prev: desde, dir: state._navDir },
+      }));
+    }
+    saveSoon();
+  }
+
+  const go = navigate;
+
+  window.addEventListener("popstate", (e) => {
+    if (scrollMem[navIdx]) scrollMem[navIdx].top = screenEl.scrollTop;
+    // Entrada creada antes del último reload: sus idx no se corresponden con
+    // el scrollMem de este arranque → descartarlo entero (pierde solo la
+    // restauración de scroll, nunca navega mal).
+    if (!e.state || e.state.epoch !== NAV_EPOCH) {
+      Object.keys(scrollMem).forEach((k) => delete scrollMem[k]);
+    }
+    navIdx = (e.state && e.state.idx) || 0;
+    const destino = resolveRoute(location.hash);
+    const route = routeFor(destino);
+    history.replaceState({ idx: navIdx, epoch: NAV_EPOCH }, "", route);
+    if (!scrollMem[navIdx]) scrollMem[navIdx] = { route, top: 0 };
+    navigate(destino, { pop: true });
+  });
 
   function view(html) {
     const wrap = document.createElement("div");
@@ -163,25 +503,104 @@
     return wrap;
   }
 
-  function sHead(title, backTo) {
+  function sHead(title, backTo, rightHtml) {
     return `<div class="shead">
-      ${backTo ? `<button class="shead__back" data-go="${backTo}" aria-label="Volver">‹</button>` : ""}
+      ${backTo ? `<button class="shead__back" data-go="${backTo}" aria-label="Volver">${icon("chevron-left")}</button>` : ""}
       <div class="shead__title">${esc(title)}</div>
+      ${rightHtml ? `<div class="shead__right">${rightHtml}</div>` : ""}
     </div>`;
   }
 
+  /* ---- Transiciones: la pantalla saliente queda como "fantasma" ---- */
+  const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // Sufijos de animación por dirección; `top` decide quién queda arriba
+  // (la pantalla entrante o el fantasma saliente).
+  const ANIM = {
+    "fwd":      { in: "fwd",  out: "fwd",  top: "in" },
+    "back":     { in: "back", out: "back", top: "out" },
+    "tab-fwd":  { in: "tabf", out: "tabf", top: "in" },
+    "tab-back": { in: "tabb", out: "tabb", top: "in" },
+    "fade":     { in: "fade", out: "fade", top: "in" },
+    "sheet":    { in: "up",   out: "hold", top: "in" },
+    "unsheet":  { in: "hold", out: "down", top: "out" },
+  };
+
+  let ghostTimer = null;
+  function finishGhost() {
+    clearTimeout(ghostTimer);
+    const g = screenEl.querySelector(".screen__ghost");
+    if (g) g.remove();
+    screenEl.classList.remove("is-anim");
+    const n = screenEl.firstElementChild;
+    if (n) {
+      Array.prototype.slice.call(n.classList).forEach((c) => {
+        if (c.indexOf("s-in-") === 0 || c === "s-new") n.classList.remove(c);
+      });
+    }
+  }
+
+  let firstRender = true;
+
   function render() {
     const fn = screens[state.screen] || screens.splash;
-    screenEl.innerHTML = "";
+    const dir = state._navDir || "none";
+    state._navDir = "none";
+    const spec = !state._preview && !reducedMotion() ? ANIM[dir] : null;
+
+    finishGhost(); // si había una transición en curso, cerrarla ya
+    const saliente = screenEl.firstElementChild;
+    const scrollPrev = screenEl.scrollTop;
+
     const node = fn();
-    node.classList.add("fade-in");
-    screenEl.appendChild(node);
+
+    if (spec && saliente) {
+      const ghost = document.createElement("div");
+      ghost.className = "screen__ghost s-out-" + spec.out + (spec.top === "out" ? " screen__ghost--top" : "");
+      // Compensar el scroll: el fantasma muestra exactamente lo que se veía.
+      saliente.style.transform = "translateY(" + -scrollPrev + "px)";
+      ghost.appendChild(saliente);
+      node.classList.add("s-new", "s-in-" + spec.in);
+      screenEl.innerHTML = "";
+      screenEl.classList.add("is-anim");
+      screenEl.appendChild(node);
+      screenEl.appendChild(ghost);
+      node.addEventListener("animationend", finishGhost, { once: true });
+      ghostTimer = setTimeout(finishGhost, 450); // red de seguridad
+    } else {
+      screenEl.innerHTML = "";
+      if (!state._preview) node.classList.add("fade-in");
+      screenEl.appendChild(node);
+    }
+
+    // Cascada de cards cuando la pantalla no llega deslizándose entera.
+    if (!state._preview && !reducedMotion() && state.screen !== "chatload" &&
+        (firstRender || dir === "none" || dir === "fade" || dir.indexOf("tab") === 0)) {
+      let i = 0;
+      node.querySelectorAll(".card, .value-row, .receipt").forEach((el) => {
+        if (i < 8) el.style.setProperty("--i", i++);
+      });
+      node.classList.add("stagger");
+    }
+    firstRender = false;
+    animateCounts(node);
+
+    // Anillos de match: animar el arco al montarse.
+    node.querySelectorAll("[data-ring]").forEach((el) => {
+      if (reducedMotion()) el.style.strokeDashoffset = el.dataset.ring;
+      else requestAnimationFrame(() => requestAnimationFrame(() => {
+        el.style.strokeDashoffset = el.dataset.ring;
+      }));
+    });
 
     const showTabs = state.perspective === "user" && USER_TABS.includes(state.screen);
     tabbar.hidden = !showTabs;
     if (showTabs) {
       tabbar.querySelectorAll(".tabbar__btn").forEach((b) => {
-        b.classList.toggle("is-active", b.dataset.nav === state.screen);
+        const activo = b.dataset.nav === state.screen;
+        b.classList.toggle("is-active", activo);
+        if (activo) b.setAttribute("aria-current", "page");
+        else b.removeAttribute("aria-current");
       });
     }
     // Re-bindear inputs de campos
@@ -193,6 +612,7 @@
 
   /* ---------- Splash ---------- */
   screens.splash = function () {
+    const nombre = state.onboarded ? String(fieldValue("identity.name") || "").split(" ")[0] : "";
     return view(`
       <div class="splash">
         <div class="splash__hero">
@@ -203,25 +623,29 @@
 
           <div style="margin-top:22px">
             <div class="value-row">
-              <div class="value-row__ico">🪪</div>
+              <div class="value-row__ico">${icon("idcard")}</div>
               <div><b>Tu contexto de viaje</b><div class="muted">Preferencias, restricciones, actividades y presupuesto, siempre con vos.</div></div>
             </div>
             <div class="value-row">
-              <div class="value-row__ico">🔐</div>
+              <div class="value-row__ico">${icon("lock")}</div>
               <div><b>Vos aprobás cada acceso</b><div class="muted">Campo por campo, con propósito y vencimiento. Revocás cuando querés.</div></div>
             </div>
             <div class="value-row">
-              <div class="value-row__ico">🧾</div>
+              <div class="value-row__ico">${icon("receipt")}</div>
               <div><b>Todo deja recibo</b><div class="muted">Ves quién leyó qué y cuándo. Nada pasa a tus espaldas.</div></div>
             </div>
           </div>
         </div>
         <div class="btn-stack">
-          <button class="btn" data-action="start-chatload">💬 Armar mi contexto charlando</button>
-          <button class="btn btn--ghost" data-action="start-onboarding">Prefiero un formulario</button>
-          <button class="btn btn--ghost" data-action="load-demo">Explorar con datos de ejemplo</button>
+          ${state.onboarded
+            ? `<button class="btn" data-action="resume">Continuar${nombre ? " como " + esc(nombre) : ""}</button>
+               <button class="btn btn--ghost" data-action="start-chatload">${icon("chat")} Armar un contexto nuevo</button>
+               <button class="btn btn--ghost" data-action="reset-demo">Empezar de nuevo</button>`
+            : `<button class="btn" data-action="start-chatload">${icon("chat")} Armar mi contexto charlando</button>
+               <button class="btn btn--ghost" data-action="start-onboarding">Prefiero un formulario</button>
+               <button class="btn btn--ghost" data-action="load-demo">Explorar con datos de ejemplo</button>`}
         </div>
-        <p class="muted" style="text-align:center;margin-top:10px;font-size:0.78rem">¿Solo querés ver cómo funciona? Probá con un perfil de ejemplo.</p>
+        <p class="muted" style="text-align:center;margin-top:10px;font-size:0.78rem">${state.onboarded ? "Tu contexto quedó guardado en este dispositivo." : "¿Solo querés ver cómo funciona? Probá con un perfil de ejemplo."}</p>
       </div>
     `);
   };
@@ -231,10 +655,6 @@
     const doms = state.passport;
     const i = state.onboardingStep;
     const dom = doms[i];
-    // Al armar por formulario, los select vacíos toman su primera opción por defecto.
-    dom.campos.forEach((f) => {
-      if (f.tipo === "select" && (f.valor === "" || f.valor == null)) f.valor = f.opciones[0];
-    });
     const dots = doms
       .map((_, idx) => {
         const cls = idx < i ? "is-done" : idx === i ? "is-active" : "";
@@ -245,7 +665,7 @@
     const last = i === doms.length - 1;
     return view(`
       <div class="progress">${dots}</div>
-      <div class="eyebrow">${esc(dom.icono)} Paso ${i + 1} de ${doms.length}</div>
+      <div class="eyebrow">Paso ${i + 1} de ${doms.length}</div>
       <h2 class="title">${esc(dom.dominio)}</h2>
       <p class="muted" style="margin-bottom:16px">Se guarda una sola vez en tu contexto. Después lo prestás con permisos.</p>
       ${campos}
@@ -281,7 +701,7 @@
       <textarea class="textarea" id="narrative-input" rows="4" style="font-style:italic">${esc(getNarrative())}</textarea>
       <div class="muted" style="font-size:0.74rem;margin:5px 2px 0">Resumen generado automáticamente. Podés editarlo.</div>
       <div class="btn-stack" style="margin-top:18px">
-        <button class="btn" data-action="plan-trip">✨ Planifiquemos el viaje</button>
+        <button class="btn" data-action="plan-trip">${icon("sparkles")} Planifiquemos el viaje</button>
         <button class="btn btn--ghost" data-action="skip-to-dashboard">Omitir por ahora</button>
       </div>
     `);
@@ -315,7 +735,7 @@
       return view(`
         ${sHead("ContextLayer Premium", "pasaporte")}
         <div class="card card--premium" style="border:none;text-align:center">
-          <div style="font-size:2rem">⭐</div>
+          <div style="color:#3a2c00">${icon("star", "ico--xl")}</div>
           <div style="font-weight:800;font-size:1.2rem;color:#3a2c00">Hacete Premium</div>
           <div style="color:#5c4a12;margin-top:2px">Una membresía, todos los proveedores.</div>
         </div>
@@ -346,6 +766,8 @@
     }
 
     // Premium activo
+    const ptsFrom = state._ptsFrom != null ? state._ptsFrom : state.points;
+    state._ptsFrom = null;
     const rewards = PREM.rewards
       .map((r) => {
         const canjeable = state.points >= r.costo;
@@ -371,11 +793,11 @@
       <div class="card card--premium" style="border:none">
         <div class="row row--between">
           <div>
-            <div style="font-weight:800;color:#3a2c00">⭐ Sos Premium</div>
+            <div style="font-weight:800;color:#3a2c00">${icon("star", "ico--sm")} Sos Premium</div>
             <div style="color:#5c4a12;font-size:0.82rem;margin-top:2px">${state.premiumPlan === "anual" ? "US$" + PREM.priceYear + "/año" : "US$" + PREM.price + "/mes"} · renovación automática</div>
           </div>
           <div style="text-align:right">
-            <div style="font-size:1.6rem;font-weight:800;color:#3a2c00">${state.points.toLocaleString("es")}</div>
+            <div style="font-size:1.6rem;font-weight:800;color:#3a2c00" data-count="${state.points}" data-from="${ptsFrom}">${state.points.toLocaleString("es")}</div>
             <div style="color:#5c4a12;font-size:0.72rem">puntos</div>
           </div>
         </div>
@@ -409,9 +831,12 @@
   screens.pasaporte = function () {
     const nombre = fieldValue("identity.name") || "viajera";
     const activos = state.grants.filter((g) => g.activo).length;
+    const temaOscuro = (document.documentElement.dataset.theme ||
+      (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")) === "dark";
 
     return view(`
-      ${sHead("Hola, " + String(nombre).split(" ")[0])}
+      ${sHead("Hola, " + String(nombre).split(" ")[0], null,
+        `<button class="icon-btn" data-action="toggle-theme" aria-label="Cambiar tema" title="Modo claro / oscuro">${icon(temaOscuro ? "sun" : "moon")}</button>`)}
       <div class="card card--brand">
         <div class="eyebrow" style="color:rgba(255,255,255,0.9)">Tu contexto está activo</div>
         <div style="font-size:1.05rem;font-weight:700;margin:4px 0 2px">Listo para tu próxima reserva</div>
@@ -420,7 +845,7 @@
 
       <div class="card" data-go="contexto" role="button" tabindex="0">
         <div class="row">
-          <div class="avatar">🪪</div>
+          <div class="avatar">${icon("idcard")}</div>
           <div class="grow"><b>Ver y editar mi contexto</b><div class="muted">Tus ${state.passport.length} categorías de hospedaje</div></div>
           <div style="color:var(--txt-mute)">›</div>
         </div>
@@ -428,7 +853,7 @@
 
       <div class="card" data-go="reservas" role="button" tabindex="0">
         <div class="row">
-          <div class="avatar">🛎️</div>
+          <div class="avatar">${icon("bell")}</div>
           <div class="grow"><b>Mis reservas</b><div class="muted">En curso y finalizadas</div></div>
           <div style="color:var(--txt-mute)">›</div>
         </div>
@@ -436,7 +861,7 @@
 
       <div class="card ${isPremium() ? "" : "card--premium"}" data-go="premium" role="button" tabindex="0"${isPremium() ? "" : ' style="border:none"'}>
         <div class="row">
-          <div class="avatar" style="background:${isPremium() ? "var(--surface-2)" : "rgba(255,255,255,.18)"}">⭐</div>
+          <div class="avatar" style="background:${isPremium() ? "var(--surface-2)" : "rgba(255,255,255,.18)"};color:${isPremium() ? "var(--warn)" : "#3a2c00"}">${icon("star")}</div>
           <div class="grow">
             <b${isPremium() ? "" : ' style="color:#3a2c00"'}>ContextLayer Premium</b>
             <div class="muted"${isPremium() ? "" : ' style="color:#5c4a12"'}>${isPremium() ? state.points.toLocaleString("es") + " puntos · membresías activas" : "US$10/mes o US$100/año · descuentos y puntos"}</div>
@@ -447,7 +872,7 @@
 
       <div class="card" data-go="permisos" role="button" tabindex="0">
         <div class="row">
-          <div class="avatar">🔐</div>
+          <div class="avatar">${icon("lock")}</div>
           <div class="grow"><b>Permisos</b><div class="muted">Quién ve tu contexto y hasta cuándo</div></div>
           <div style="color:var(--txt-mute)">›</div>
         </div>
@@ -456,7 +881,7 @@
       <div class="section-label">Velo en acción</div>
       <div class="card card--soft" data-go="agente" role="button" tabindex="0">
         <div class="row">
-          <div class="avatar">✨</div>
+          <div class="avatar">${icon("sparkles")}</div>
           <div class="grow"><b>Buscar con tu agente</b><div class="muted">Aria busca alojamiento o experiencias con tu contexto</div></div>
           <div style="color:var(--txt-mute)">›</div>
         </div>
@@ -472,7 +897,7 @@
       <div class="card">
         <div class="row row--between">
           <div class="row" style="gap:10px">
-            <div class="avatar" style="width:38px;height:38px;font-size:1.1rem">${esc(dom.icono)}</div>
+            <div class="avatar" style="width:38px;height:38px">${domIcon(dom)}</div>
             <b>${esc(dom.dominio)}</b>
           </div>
           <button class="btn btn--dark btn--sm" data-action="edit-dom" data-dom="${dom.id}">Editar</button>
@@ -496,7 +921,7 @@
       <p class="muted" style="margin-bottom:12px">Esta información te pertenece. Ninguna app ni hotel la ve sin tu permiso.</p>
       <div class="card card--soft" data-action="start-chat-update" role="button" tabindex="0">
         <div class="row" style="gap:10px">
-          <div class="avatar">💬</div>
+          <div class="avatar">${icon("chat")}</div>
           <div class="grow"><b>Actualizar charlando</b><div class="muted">Contale al agente por texto o voz y ajustá tu contexto</div></div>
           <div style="color:var(--txt-mute)">›</div>
         </div>
@@ -562,7 +987,7 @@
     return view(`
       ${sHead("Actividad")}
       <p class="muted" style="margin-bottom:8px">Cada lectura y cada escritura deja un recibo. Todo es inspeccionable.</p>
-      <div class="card">${items || '<div class="empty"><span class="empty__ico">🧾</span>Todavía no hay actividad.</div>'}</div>
+      <div class="card">${items || '<div class="empty"><span class="empty__ico">' + icon("receipt", "ico--xl") + '</span>Todavía no hay actividad.</div>'}</div>
     `);
   };
 
@@ -581,7 +1006,7 @@
               <div><b>${esc(g.solicitante)}</b><div class="muted">${esc(g.proposito)}</div></div>
             </div>
             <label class="switch">
-              <input type="checkbox" ${g.activo ? "checked" : ""} data-action="toggle-grant" data-grant="${g.id}" />
+              <input type="checkbox" ${g.activo ? "checked" : ""} data-action="toggle-grant" data-grant="${g.id}" aria-label="Acceso de ${esc(g.solicitante)}" />
               <span class="switch__track"></span>
             </label>
           </div>
@@ -593,7 +1018,7 @@
           </div>
           ${
             g.activo
-              ? `<button class="btn btn--danger btn--sm" style="margin-top:12px" data-action="toggle-grant" data-grant="${g.id}">Revocar acceso</button>`
+              ? `<button class="btn btn--danger btn--sm" style="margin-top:12px" data-action="ask-revoke" data-grant="${g.id}">Revocar acceso</button>`
               : ""
           }
         </div>`;
@@ -603,7 +1028,7 @@
     return view(`
       ${sHead("Permisos", "pasaporte")}
       <p class="muted" style="margin-bottom:14px">Quién tiene acceso a tu contexto, con qué alcance y hasta cuándo. Revocás de un toque.</p>
-      ${items || '<div class="empty"><span class="empty__ico">🔐</span>Todavía no diste ningún permiso.</div>'}
+      ${items || '<div class="empty"><span class="empty__ico">' + icon("lock", "ico--xl") + '</span>Todavía no diste ningún permiso.</div>'}
     `);
   };
 
@@ -611,7 +1036,7 @@
   function reservaCard(r) {
     const app = appById(r.appId);
     const enCurso = r.estado === "en_curso";
-    const tipoChip = r.esTour ? "🎟️ Experiencia" : "🛎️ Alojamiento";
+    const tipoChip = r.esTour ? icon("ticket", "ico--sm") + " Experiencia" : icon("bell", "ico--sm") + " Alojamiento";
     const meta = r.esTour
       ? `${esc(r.fechas)} · ${esc(r.duracion || "experiencia")}`
       : `${esc(r.fechas)} · ${r.noches} noche${r.noches === 1 ? "" : "s"}`;
@@ -644,7 +1069,7 @@
     const finalizadas = state.reservas.filter((r) => r.estado === "finalizada");
     const vacio =
       state.reservas.length === 0
-        ? `<div class="empty"><span class="empty__ico">🛎️</span>Todavía no tenés reservas.<br/>Buscá alojamiento con Aria para empezar.</div>`
+        ? `<div class="empty"><span class="empty__ico">${icon("bell", "ico--xl")}</span>Todavía no tenés reservas.<br/>Buscá alojamiento con Aria para empezar.</div>`
         : "";
     return view(`
       ${sHead("Mis reservas", "pasaporte")}
@@ -668,19 +1093,19 @@
       ${sHead("Buscar con Aria", "pasaporte")}
       <div class="card">
         <div class="row" style="gap:10px">
-          <div class="avatar">🤖</div>
+          <div class="avatar">${icon("bot")}</div>
           <div><b>Aria</b><div class="muted">Busca en tus apps conectadas con tu contexto</div></div>
         </div>
       </div>
       <div class="section-label">¿Qué buscás?</div>
       <div class="seg">
-        <button class="seg__btn ${!isTour ? "is-active" : ""}" data-action="search-type" data-type="stay">🛏️ Alojamiento</button>
-        <button class="seg__btn ${isTour ? "is-active" : ""}" data-action="search-type" data-type="tour">🎟️ Experiencia</button>
+        <button class="seg__btn ${!isTour ? "is-active" : ""}" data-action="search-type" data-type="stay">${icon("hotel")} Alojamiento</button>
+        <button class="seg__btn ${isTour ? "is-active" : ""}" data-action="search-type" data-type="tour">${icon("ticket")} Experiencia</button>
       </div>
       <textarea class="textarea" id="pedido-input" placeholder="${esc(placeholder)}">${esc(state.pedido)}</textarea>
       <div class="card card--soft" style="margin-top:12px">
         <div class="row" style="gap:8px;align-items:flex-start">
-          <span>🔐</span>
+          <span style="color:var(--brand)">${icon("lock")}</span>
           <div class="muted">Aria leerá, con tu permiso: <b style="color:var(--txt-dim)">${esc(hint)}</b>. Cada acceso deja recibo.</div>
         </div>
       </div>
@@ -691,28 +1116,98 @@
   };
 
   screens.thinking = function () {
+    const isTour = state.searchType === "tour";
     const steps = [
       "Leyendo tu contexto autorizado…",
       "Consultando tus apps conectadas…",
-      "Filtrando por tus gustos y presupuesto…",
+      isTour ? "Filtrando por tus actividades y presupuesto…" : "Filtrando por tus gustos y presupuesto…",
       "Ordenando el mejor match para vos…",
     ];
+    const skelCard = `
+      <div class="card">
+        <div class="skel skel--title"></div>
+        <div class="skel skel--line"></div>
+        <div class="skel skel--line short"></div>
+      </div>`;
     const node = view(`
       <div class="thinking">
         <div class="spinner"></div>
         <b>Aria está trabajando</b>
-        <div id="steps" style="margin-top:14px">
-          ${steps.map((s) => `<div class="thinking__step">${esc(s)}</div>`).join("")}
+        <div class="thinking__list">
+          ${steps.map((s) => `
+            <div class="tstep">
+              <span class="tstep__ico">
+                <span class="tstep__spin"></span>
+                <svg class="tstep__check" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+              </span>
+              <span>${esc(s)}</span>
+            </div>`).join("")}
         </div>
+        <div class="skel-cards">${skelCard}${skelCard}</div>
       </div>
     `);
+    // En preview la pantalla queda congelada, con todos los pasos completos.
+    if (state._preview) {
+      node.querySelectorAll(".tstep").forEach((el) => el.classList.add("is-done"));
+      node.querySelector(".skel-cards").classList.add("show");
+      return node;
+    }
+    // Token de esta corrida: si el usuario navega antes de terminar, no lo
+    // teletransportamos a resultados.
+    const run = (state._thinkingRun = {});
+    const els = Array.prototype.slice.call(node.querySelectorAll(".tstep"));
+    let t = 120;
+    els.forEach((el, idx) => {
+      const dur = 480 + Math.random() * 320; // duración levemente aleatoria
+      setTimeout(() => el.classList.add("is-active"), t);
+      t += dur;
+      setTimeout(() => {
+        el.classList.remove("is-active");
+        el.classList.add("is-done");
+        if (idx === 1) node.querySelector(".skel-cards").classList.add("show");
+      }, t);
+    });
     setTimeout(() => {
-      const els = node.querySelectorAll(".thinking__step");
-      els.forEach((el, idx) => setTimeout(() => el.classList.add("show"), idx * 550));
-      setTimeout(() => go("resultados"), els.length * 550 + 700);
-    }, 30);
+      if (state._thinkingRun === run && state.screen === "thinking") {
+        milestone("results_shown", {
+          type: state.searchType,
+          count: (state.searchType === "tour" ? D.tours : D.opciones).slice(0, 5).length,
+        });
+        go("resultados");
+      }
+    }, t + 500);
     return node;
   };
+
+  /* ---- Match %: qué tan bien coincide una oferta con el contexto ---- */
+  // Determinístico: campos usados con valor / total + bonus por destacada,
+  // menos penalidad si el precio supera el presupuesto. Rango 40–99.
+  function matchScore(o) {
+    const usados = o.contextoUsado || [];
+    const conValor = usados.filter((k) => {
+      const v = fieldValue(k);
+      return v !== "" && v != null && v !== "—";
+    }).length;
+    const frac = usados.length ? conValor / usados.length : 0.5;
+    let s = 62 + Math.round(frac * 30);
+    if (o.destacada) s += 6;
+    const budget = Number(fieldValue("stay.budget.max")) || 0;
+    const precio = o.esTour ? o.precio : o.precioNoche;
+    if (budget && precio > budget) s -= 8;
+    return Math.max(40, Math.min(99, s));
+  }
+
+  const RING_C = (2 * Math.PI * 18).toFixed(1);
+  function matchRing(score) {
+    const off = (RING_C * (1 - score / 100)).toFixed(1);
+    return `<div class="matchring" title="Coincidencia con tu contexto" role="img" aria-label="${score}% de match">
+      <svg viewBox="0 0 44 44" aria-hidden="true">
+        <circle class="matchring__bg" cx="22" cy="22" r="18"></circle>
+        <circle class="matchring__val" cx="22" cy="22" r="18" stroke-dasharray="${RING_C}" stroke-dashoffset="${RING_C}" data-ring="${off}"></circle>
+      </svg>
+      <span class="matchring__num">${score}%</span>
+    </div>`;
+  }
 
   // Tarjeta de resultado, sirve para alojamiento y experiencia.
   function offerCard(o) {
@@ -742,7 +1237,10 @@
             <div style="font-weight:700;margin-top:6px">${esc(o.nombre)}</div>
             <div class="muted">${sub}</div>
           </div>
-          <div class="opt__price">${price}</div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+            ${matchRing(matchScore(o))}
+            <div class="opt__price">${price}</div>
+          </div>
         </div>
         <div class="chip-wrap" style="margin-top:8px">${source}${premiumChip}</div>
         <ul class="match-list">${matches}</ul>
@@ -758,6 +1256,11 @@
     const cards = top.map(offerCard).join("");
     const titulo = top.length + (isTour ? " experiencias para vos" : " opciones para vos");
     return view(`
+      <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+        <linearGradient id="ringgrad" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#5566ff"/><stop offset="1" stop-color="#23c3a4"/>
+        </linearGradient>
+      </defs></svg>
       ${sHead(titulo, "agente")}
       <div class="card card--soft"><div class="muted">Aria buscó ${isTour ? "experiencias" : "alojamiento"} en tus <b style="color:var(--txt-dim)">apps conectadas</b> usando tu contexto. Tocá una y seguí la reserva directamente en esa app.</div></div>
       ${cards}
@@ -800,10 +1303,54 @@
     return scored.slice(0, limit || 2).map((x) => x.tr);
   }
 
+  /* ---- Micro-encuesta 1-tap tras la primera reserva ---- */
+  const FB_TAGS = ["Rápido", "Confuso", "Me dio confianza", "Pediría más control"];
+
+  function feedbackSheetHTML() {
+    const caras = ["😖", "😕", "😐", "🙂", "🤩"];
+    const fb = state._fb || { score: 0, tags: [] };
+    return `
+      <h2 class="title" style="text-align:center">¿Qué te pareció reservar así?</h2>
+      <p class="muted" style="text-align:center;margin-bottom:14px">Tu opinión mejora el prototipo. Es anónima.</p>
+      <div class="fb-faces">
+        ${caras.map((c, i) => `<button class="fb-face ${fb.score === i + 1 ? "is-on" : ""}" data-action="fb-score" data-v="${i + 1}" aria-label="Puntaje ${i + 1} de 5">${c}</button>`).join("")}
+      </div>
+      ${fb.score
+        ? `<div class="chip-wrap" style="justify-content:center;margin:12px 0 2px">
+             ${FB_TAGS.map((t) => `<button class="chip fb-tag ${fb.tags.indexOf(t) >= 0 ? "chip--ok" : ""}" data-action="fb-tag" data-t="${esc(t)}">${esc(t)}</button>`).join("")}
+           </div>
+           <div class="btn-stack" style="margin-top:12px">
+             <button class="btn" data-action="fb-send">Enviar</button>
+           </div>`
+        : `<div class="btn-stack" style="margin-top:12px">
+             <button class="btn btn--ghost" data-action="close-sheet">Ahora no</button>
+           </div>`}
+    `;
+  }
+
+  function refreshFeedbackSheet() {
+    const panel = document.querySelector(".sheet__panel");
+    if (panel) panel.innerHTML = '<div class="sheet__grip"></div>' + feedbackSheetHTML();
+  }
+
+  function openFeedbackSheet() {
+    if (state.screen !== "reservaOk" || state.feedbackGiven) return;
+    state._fb = { score: 0, tags: [] };
+    openSheet(feedbackSheetHTML());
+  }
+
   screens.reservaOk = function () {
     const o = findOffer(state.selectedOptionId) || {};
     const app = appById(o.sourceAppId);
     const esTour = !!o.esTour;
+
+    // Celebración: confetti al llegar desde una reserva recién confirmada,
+    // y una única micro-encuesta de feedback un momento después.
+    if (state._celebrate && !state._preview) {
+      state._celebrate = false;
+      setTimeout(confetti, 350);
+      if (!state.feedbackGiven) setTimeout(openFeedbackSheet, 1900);
+    }
 
     // Cross-sell: tras reservar un alojamiento, sugerir experiencias en el MISMO
     // destino, ordenadas por el contexto del usuario.
@@ -853,7 +1400,7 @@
       ${puntosMsg}
       <div class="card card--soft" style="text-align:left">
         <div class="row" style="gap:10px">
-          <span>🔐</span>
+          <span style="color:var(--brand)">${icon("lock")}</span>
           <div class="muted">${esc(app ? app.nombre : "La app")} tiene acceso a tu contexto según lo que autorizaste. Lo ves y lo revocás cuando quieras desde <b style="color:var(--txt-dim)">Permisos</b>. Quedó registrado en Actividad.</div>
         </div>
       </div>
@@ -866,42 +1413,66 @@
   };
 
   /* ============================================================ CHAT (carga conversacional) */
-  screens.chatload = function () {
-    const msgs = state.chat
+  // Piezas del chat que se re-renderizan solas (sin tocar la barra de entrada,
+  // así el foco y el teclado del tester no se pierden en cada mensaje).
+  function buildChatMsgs() {
+    return state.chat
       .map((m) => {
+        if (m.typing) {
+          return `<div class="bubble bubble--agent bubble--typing" aria-label="El agente está escribiendo"><span></span><span></span><span></span></div>`;
+        }
         const chips = (m.chips && m.chips.length)
           ? `<div class="bubble__chips chip-wrap">${m.chips.map((c) => `<span class="chip">${esc(c)}</span>`).join("")}</div>`
           : "";
         return `<div class="bubble bubble--${m.role === "user" ? "user" : "agent"}">${esc(m.text)}${chips}</div>`;
       })
       .join("");
+  }
 
-    // Respuestas rápidas + saltar + aviso de texto libre (durante el guiado).
-    let quickBlock = "";
+  // Respuestas rápidas + saltar + aviso de texto libre (durante el guiado).
+  function buildQuickBlock() {
     const step = state.guideStep < GUIDE.length ? GUIDE[state.guideStep] : null;
-    if (step && !state.chatDone) {
-      const f = findField(step.key);
-      let opts = [];
-      if (f && f.opciones) opts = f.opciones.slice();
-      else if (step.key === "stay.budget.max") opts = ["120 USD", "180 USD", "250 USD"];
-      const chips = opts
-        .map((s) => `<button data-action="chat-suggest" data-text="${esc(s)}">${esc(s)}</button>`)
-        .join("");
-      quickBlock = `
-        <div class="chat-suggest">
-          ${chips}
-          <button data-action="chat-skip" style="border-style:dashed">Prefiero no decirlo</button>
-        </div>
-        <div class="muted" style="text-align:center;font-size:0.76rem;margin:2px 0 6px">
-          Elegí una opción o escribí/dictá tu propia respuesta. 🎤
-        </div>`;
-    }
+    if (!step || state.chatDone || state._typingTimer) return "";
+    const f = findField(step.key);
+    let opts = [];
+    if (f && f.opciones) opts = f.opciones.slice();
+    else if (step.key === "stay.budget.max") opts = ["120 USD", "180 USD", "250 USD"];
+    const chips = opts
+      .map((s) => `<button data-action="chat-suggest" data-text="${esc(s)}">${esc(s)}</button>`)
+      .join("");
+    return `
+      <div class="chat-suggest">
+        ${chips}
+        <button data-action="chat-skip" style="border-style:dashed">Prefiero no decirlo</button>
+      </div>
+      <div class="muted" style="text-align:center;font-size:0.76rem;margin:2px 0 6px">
+        Elegí una opción o escribí/dictá tu propia respuesta.
+      </div>`;
+  }
 
-    const progreso = state.guideStep < GUIDE.length
+  function buildProgress() {
+    return state.guideStep < GUIDE.length
       ? `<div class="progress" style="margin-bottom:14px">${GUIDE.map((_, i) =>
           `<div class="progress__dot ${i < state.guideStep ? "is-done" : i === state.guideStep ? "is-active" : ""}"></div>`
         ).join("")}</div>`
       : "";
+  }
+
+  // Re-render parcial: solo mensajes, chips y progreso.
+  function renderChatArea() {
+    const log = document.getElementById("chat-log");
+    if (!log) return; // no estamos en el chat
+    log.innerHTML = buildChatMsgs();
+    const quick = document.getElementById("chat-quick");
+    if (quick) quick.innerHTML = buildQuickBlock();
+    const prog = document.getElementById("chat-progress");
+    if (prog) prog.innerHTML = buildProgress();
+  }
+
+  screens.chatload = function () {
+    const msgs = buildChatMsgs();
+    const quickBlock = `<div id="chat-quick">${buildQuickBlock()}</div>`;
+    const progreso = `<div id="chat-progress">${buildProgress()}</div>`;
 
     // Resumen del contexto al terminar el guiado.
     const resumen = state.guidedComplete
@@ -916,21 +1487,21 @@
     return view(`
       ${sHead("Armar mi contexto", "pasaporte")}
       ${progreso}
-      <div class="chat">${msgs}</div>
+      <div class="chat" id="chat-log" aria-live="polite">${msgs}</div>
       ${quickBlock}
       ${resumen}
       ${state.guidedComplete
         ? `<div class="btn-stack">
-             <button class="btn" data-action="plan-trip">✨ Planifiquemos el viaje</button>
+             <button class="btn" data-action="plan-trip">${icon("sparkles")} Planifiquemos el viaje</button>
              <button class="btn btn--ghost" data-action="skip-to-dashboard">Omitir por ahora</button>
            </div>`
         : state.chatDone
           ? `<div class="btn-stack"><button class="btn" data-action="chat-finish">Listo, ver mi contexto</button></div>`
           : ""}
       <div class="chatbar">
-        <button class="icon-btn mic-btn" data-action="mic" aria-label="Hablar" title="Dictar por voz">🎤</button>
+        <button class="icon-btn mic-btn" data-action="mic" aria-label="Hablar" title="Dictar por voz">${icon("mic")}</button>
         <textarea class="textarea" id="chat-input" rows="1" placeholder="Escribí o tocá el micrófono…"></textarea>
-        <button class="icon-btn icon-btn--send" data-action="chat-send" aria-label="Enviar">➤</button>
+        <button class="icon-btn icon-btn--send" data-action="chat-send" aria-label="Enviar">${icon("send")}</button>
       </div>
     `);
   };
@@ -1002,22 +1573,69 @@
     return ups;
   }
 
-  function chatSend(text) {
+  function chatSend(text, source) {
     const clean = (text || "").trim();
-    if (!clean) return;
+    if (!clean) return false;
+    if (state._typingTimer) return false; // el agente todavía está "escribiendo"
+    // Solo fuente, paso y longitud: el contenido del chat nunca se trackea.
+    track("chat_msg", {
+      source: source || "text",
+      step_key: state.guideStep < GUIDE.length ? GUIDE[state.guideStep].key : null,
+      len: clean.length,
+    });
     state.chat.push({ role: "user", text: clean });
+
+    const estabaCompleto = state.guidedComplete;
+    const antes = state.chat.length;
+    let huboCambios = false;
     if (state.guideStep < GUIDE.length) {
       guidedTurn(clean);
     } else {
       // Modo libre, una vez completado el guiado.
       const ups = parseContext(clean);
+      huboCambios = ups.length > 0;
       if (ups.length) {
         state.chat.push({ role: "agent", text: "Listo, lo actualicé:", chips: ups.map((u) => u.label + ": " + u.valor) });
       } else {
         state.chat.push({ role: "agent", text: "Puedo seguir anotando lo que me cuentes, o tocá “Listo, ver mi contexto”." });
       }
     }
-    render();
+
+    // Diferir la respuesta del agente detrás de un typing indicator.
+    const respuestas = state.chat.splice(antes);
+    if (reducedMotion()) {
+      respuestas.forEach((r) => state.chat.push(r));
+      chatAfterReply(estabaCompleto, huboCambios);
+      return true;
+    }
+    state.chat.push({ role: "agent", typing: true });
+    renderChatArea();
+    scrollChatBottom();
+    state._typingTimer = setTimeout(() => {
+      state._typingTimer = null;
+      const ultimo = state.chat[state.chat.length - 1];
+      if (ultimo && ultimo.typing) state.chat.pop(); // saca el typing (si el chat no fue reiniciado)
+      respuestas.forEach((r) => state.chat.push(r));
+      chatAfterReply(estabaCompleto, huboCambios);
+      saveSoon();
+    }, 480 + Math.random() * 420);
+    return true;
+  }
+
+  function cancelTyping() {
+    if (state._typingTimer) {
+      clearTimeout(state._typingTimer);
+      state._typingTimer = null;
+    }
+    state.chat = state.chat.filter((m) => !m.typing);
+  }
+
+  // Cuando el guiado termina hay que re-renderizar la pantalla completa
+  // (aparecen el resumen y los botones); si no, alcanza con el área del chat.
+  function chatAfterReply(estabaCompleto, huboCambios) {
+    if (state.screen !== "chatload") return; // el tester ya se fue del chat
+    if (state.guidedComplete && (!estabaCompleto || huboCambios)) render();
+    else renderChatArea();
     scrollChatBottom();
   }
 
@@ -1087,6 +1705,7 @@
     state.chatDone = true;
     state.guidedComplete = true;
     state.onboarded = true;
+    milestone("onboarding_complete", { mode: "chat" });
   }
 
   /* ---- Resumen en lenguaje natural del contexto ---- */
@@ -1154,10 +1773,10 @@
         const opts = ['<option value="">Elegí…</option>']
           .concat(f.opciones.map((o) => `<option value="${esc(o)}" ${o === f.valor ? "selected" : ""}>${esc(o)}</option>`))
           .join("");
-        control = `<select id="sum-input" data-key="${esc(key)}">${opts}</select>`;
+        control = `<select id="sum-input">${opts}</select>`;
       } else {
         const type = f && f.tipo === "number" ? "number" : "text";
-        control = `<input id="sum-input" data-key="${esc(key)}" type="${type}" value="${esc(f ? f.valor : "")}" placeholder="${esc(fieldLabel(key))}" />`;
+        control = `<input id="sum-input" type="${type}" value="${esc(f ? f.valor : "")}" placeholder="${esc(fieldLabel(key))}" />`;
       }
       return `<div class="sum-edit">
         <div class="grow">${control}</div>
@@ -1194,8 +1813,12 @@
     const app = item && item.appId ? appById(item.appId) : null;
     if (app) return brandBadge(app, size || 44);
     const s = size || 44;
-    return `<div class="avatar" style="width:${s}px;height:${s}px">${esc(item && item.icono ? item.icono : "🔒")}</div>`;
+    const inner = item && item.iconName ? icon(item.iconName) : esc(item && item.icono ? item.icono : "🔒");
+    return `<div class="avatar" style="width:${s}px;height:${s}px">${inner}</div>`;
   }
+
+  // Ícono de un dominio del pasaporte: SVG si tiene iconName, si no el emoji.
+  const domIcon = (dom) => (dom.iconName ? icon(dom.iconName) : esc(dom.icono));
 
   // Insignia de marca (monograma sobre el color de la empresa).
   function brandBadge(a, size) {
@@ -1281,7 +1904,7 @@
         </div>
         <div class="card card--soft">
           <div class="row" style="gap:8px;align-items:flex-start">
-            <span>🔐</span>
+            <span style="color:var(--brand)">${icon("lock")}</span>
             <div class="muted">${esc(a.nombre)} ya tiene tu contexto vía ContextLayer:<div class="chip-wrap" style="margin-top:6px">${compartido}</div></div>
           </div>
         </div>
@@ -1328,7 +1951,7 @@
           </div>
           <div class="card card--soft">
             <div class="row" style="gap:8px;align-items:flex-start">
-              <span>🔐</span>
+              <span style="color:var(--brand)">${icon("lock")}</span>
               <div class="muted">${esc(a.nombre)} está usando tu contexto: <div class="chip-wrap" style="margin-top:6px">${compartido}</div></div>
             </div>
           </div>
@@ -1396,7 +2019,7 @@
             <div class="field-grant__val">${esc(fieldValue(k))}</div>
           </div>
           <label class="switch">
-            <input type="checkbox" ${on ? "checked" : ""} data-action="toggle-sso-field" data-key="${esc(k)}" />
+            <input type="checkbox" ${on ? "checked" : ""} data-action="toggle-sso-field" data-key="${esc(k)}" aria-label="Compartir ${esc(fieldLabel(k))}" />
             <span class="switch__track"></span>
           </label>
         </div>`;
@@ -1416,7 +2039,7 @@
         </div>
 
         <div class="sso__acct">
-          <div class="avatar" style="width:38px;height:38px;font-size:1rem">👤</div>
+          <div class="avatar" style="width:38px;height:38px">${icon("user")}</div>
           <div class="grow"><b>${esc(fieldValue("identity.name"))}</b><div class="muted">Tu cuenta ContextLayer</div></div>
         </div>
 
@@ -1446,7 +2069,7 @@
       if (el.type === "checkbox") return; // los toggles se manejan aparte
       el.addEventListener("change", () => {
         const f = findField(el.dataset.key);
-        if (f) f.valor = el.type === "number" ? Number(el.value) : el.value;
+        if (f) f.valor = el.type === "number" ? (el.value === "" ? "" : Number(el.value)) : el.value;
       });
     });
   }
@@ -1456,6 +2079,30 @@
     if (goEl) return go(goEl.dataset.go);
     const actEl = e.target.closest("[data-action]");
     if (actEl) handleAction(actEl.dataset.action, actEl);
+  });
+
+  // Enter envía en el chat (Shift+Enter hace salto de línea).
+  // Las cards con role="button" también responden a Enter/Espacio.
+  screenEl.addEventListener("keydown", (e) => {
+    if (e.target && e.target.id === "chat-input" && e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleAction("chat-send", e.target);
+      return;
+    }
+    if (e.key !== "Enter" && e.key !== " ") return;
+    if (e.target.matches("input, select, textarea, button, a")) return;
+    const el = e.target.closest('[role="button"]');
+    if (!el) return;
+    e.preventDefault();
+    el.click();
+  });
+
+  // El textarea del chat crece con el texto (hasta 120 px).
+  screenEl.addEventListener("input", (e) => {
+    if (e.target && e.target.id === "chat-input") {
+      e.target.style.height = "auto";
+      e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
+    }
   });
 
   screenEl.addEventListener("change", (e) => {
@@ -1475,30 +2122,65 @@
     }
   });
 
+  // Toda acción persiste el estado al terminar (aunque haya returns tempranos).
   function handleAction(action, el) {
+    try {
+      doAction(action, el);
+    } finally {
+      saveSoon();
+    }
+  }
+
+  function doAction(action, el) {
     switch (action) {
+      case "resume":
+        go("pasaporte");
+        break;
+      case "reset-demo":
+        clearSavedState();
+        resetEmptyUser();
+        state.onboarded = false;
+        state.chat = [];
+        state.chatDone = false;
+        state.guideStep = 0;
+        state.appLogged = {};
+        state.currentAppId = null;
+        toast("Demo reiniciada");
+        go("splash");
+        break;
       case "start-onboarding":
         resetEmptyUser();
         state.onboardingStep = 0;
+        defaultSelects(state.passport[0]);
+        milestone("onboarding_start", { mode: "form" });
         go("onboarding");
         break;
       case "load-demo":
         loadDemoUser();
         state.onboarded = true;
+        milestone("demo_loaded");
         toast("Perfil de ejemplo cargado");
         go("pasaporte");
         break;
-      case "onboarding-next":
+      case "onboarding-next": {
+        const errV = validateDom(state.passport[state.onboardingStep]);
+        if (errV) {
+          markFieldError(errV.key, errV.msg);
+          break;
+        }
         if (state.onboardingStep < state.passport.length - 1) {
           state.onboardingStep++;
+          defaultSelects(state.passport[state.onboardingStep]);
           go("onboarding");
         } else {
           state.onboarded = true;
           state.narrativeEdited = false;
+          milestone("onboarding_complete", { mode: "form" });
           toast("Contexto creado ✓");
           go("onboardingDone");
         }
         break;
+      }
       case "onboarding-prev":
         if (state.onboardingStep > 0) state.onboardingStep--;
         go("onboarding");
@@ -1516,6 +2198,8 @@
       /* ---- Carga conversacional ---- */
       case "start-chatload":
         resetEmptyUser();
+        cancelTyping();
+        milestone("onboarding_start", { mode: "chat" });
         state.guideStep = 0;
         state.chatDone = false;
         state.guidedComplete = false;
@@ -1531,11 +2215,15 @@
       case "chat-send": {
         const input = document.getElementById("chat-input");
         const v = input ? input.value : "";
-        chatSend(v);
+        if (chatSend(v) && input) {
+          input.value = "";
+          input.style.height = "";
+          input.focus();
+        }
         break;
       }
       case "chat-suggest":
-        chatSend(el.dataset.text);
+        chatSend(el.dataset.text, "chip");
         break;
       case "edit-summary":
         state.summaryEditKey = el.dataset.key;
@@ -1557,6 +2245,7 @@
       }
       case "chat-skip": {
         if (state.guideStep >= GUIDE.length) break;
+        track("chat_msg", { source: "skip", step_key: GUIDE[state.guideStep].key });
         state.chat.push({ role: "user", text: "Prefiero no decirlo" });
         state.chat.push({ role: "agent", text: "Sin problema, lo dejo en blanco. Podés completarlo cuando quieras." });
         advanceGuide();
@@ -1565,6 +2254,7 @@
         break;
       }
       case "start-chat-update":
+        cancelTyping();
         state.guideStep = GUIDE.length; // modo libre (no reinicia el contexto)
         state.chatDone = true;
         state.guidedComplete = false;
@@ -1605,9 +2295,11 @@
         break;
       case "open-sso":
         state.ssoDraft = null;
+        milestone("sso_opened", { app: state.currentAppId });
         go("sso");
         break;
       case "cancel-sso":
+        milestone("sso_cancelled", { app: state.currentAppId });
         go("thirdApp");
         break;
       case "grant-sso":
@@ -1615,6 +2307,7 @@
         break;
       case "app-logout": {
         const id = el.dataset.app;
+        milestone("app_logout", { app: id });
         delete state.appLogged[id];
         state.openListingId = null;
         // revocar el permiso asociado a esta app
@@ -1648,10 +2341,16 @@
         const input = document.getElementById("pedido-input");
         if (input) state.pedido = input.value.trim();
         if (!state.pedido) return toast("Contale a Aria qué necesitás");
+        milestone("search_run", {
+          type: state.searchType,
+          pedido_len: state.pedido.length,
+          edited: state.pedido !== D.pedidoSugerido && state.pedido !== D.pedidoSugeridoTour,
+        });
         addReceipt({
           tipo: "read",
           solicitante: "Aria · tu agente de viaje",
           icono: "🤖",
+          iconName: "bot",
           detalle: 'Leyó tu contexto para: "' + state.pedido + '"',
           fields:
             state.searchType === "tour"
@@ -1666,18 +2365,22 @@
       case "book-in-app": {
         const o = findOffer(el.dataset.opt);
         if (!o) break;
+        milestone("option_open", {
+          opt: o.id,
+          app: o.sourceAppId,
+          type: o.esTour ? "tour" : "stay",
+          position: (o.esTour ? D.tours : D.opciones).findIndex((x) => x.id === o.id),
+        });
         state.selectedOptionId = o.id;
         state.openListingId = o.id;
         state.currentAppId = o.sourceAppId;
         state.perspective = "app";
-        setPerspectiveButtons("app");
         go("thirdApp");
         break;
       }
       case "back-to-results":
         state.openListingId = null;
         state.perspective = "user";
-        setPerspectiveButtons("user");
         go("resultados");
         break;
       case "finish-booking": {
@@ -1692,12 +2395,12 @@
             detalle: (o.esTour ? "Experiencia confirmada: " : "Reserva confirmada: ") + o.nombre,
             fields: a.fields,
           });
-          // Puntos premium por esta reserva
-          const totalBase = o.esTour ? o.precio : o.precioNoche * 3;
-          const ganados = isPremium() ? pointsFor(premiumPrice(totalBase)) : 0;
-          if (ganados) state.points += ganados;
-          // Registrar en "Mis reservas" como "en curso"
+          // Registrar en "Mis reservas" como "en curso". Los puntos premium se
+          // suman solo si la reserva es nueva (evita duplicar re-reservando).
           if (!state.reservas.some((r) => r.optId === o.id)) {
+            const totalBase = o.esTour ? o.precio : o.precioNoche * 3;
+            const ganados = isPremium() ? pointsFor(premiumPrice(totalBase)) : 0;
+            if (ganados) state.points += ganados;
             state.reservas.unshift(
               o.esTour
                 ? {
@@ -1732,23 +2435,31 @@
             );
           }
         }
+        if (a && o) {
+          milestone("booking_confirmed", {
+            opt: o.id,
+            app: a.id,
+            type: o.esTour ? "tour" : "stay",
+            premium: isPremium(),
+            total: premiumPrice(o.esTour ? o.precio : o.precioNoche * 3),
+          });
+        }
         state.openListingId = null;
+        state._celebrate = true;
+        buzz(18);
         go("reservaOk");
         break;
       }
       case "go-user-permisos":
         state.perspective = "user";
-        setPerspectiveButtons("user");
         go("permisos");
         break;
       case "go-user-reservas":
         state.perspective = "user";
-        setPerspectiveButtons("user");
         go("reservas");
         break;
       case "go-user-home":
         state.perspective = "user";
-        setPerspectiveButtons("user");
         go("pasaporte");
         break;
 
@@ -1758,25 +2469,117 @@
         go("premium");
         break;
       case "subscribe-premium":
+        state._ptsFrom = state.points;
         state.premium = true;
         state.premiumPlan = state.selectedPlan || "anual";
         state.points += 200; // puntos de bienvenida
+        milestone("premium_subscribed", { plan: state.premiumPlan });
+        buzz();
         toast("¡Bienvenido a Premium! +200 pts de regalo");
         go("premium");
+        confetti();
         break;
+
       case "cancel-premium":
+        openSheet(`
+          <h2 class="title">¿Cancelar tu suscripción Premium?</h2>
+          <p class="muted" style="margin-bottom:16px">Perdés los descuentos y las membresías en los proveedores. Tus ${state.points.toLocaleString("es")} puntos quedan congelados hasta que vuelvas.</p>
+          <div class="btn-stack">
+            <button class="btn btn--danger" data-action="confirm-cancel-premium">Sí, cancelar Premium</button>
+            <button class="btn btn--ghost" data-action="close-sheet">Seguir siendo Premium</button>
+          </div>`);
+        break;
+      case "confirm-cancel-premium":
+        closeSheet();
         state.premium = false;
+        state.premiumPlan = null;
+        milestone("premium_cancelled");
         toast("Suscripción cancelada");
         go("pasaporte");
         break;
+
       case "redeem": {
         const rw = PREM.rewards.find((x) => x.id === el.dataset.reward);
         if (!rw) break;
         if (state.points < rw.costo) return toast("No te alcanzan los puntos");
+        openSheet(`
+          <h2 class="title">${esc(rw.icono)} ${esc(rw.titulo)}</h2>
+          <p class="muted" style="margin-bottom:16px">${esc(rw.detalle)}. Cuesta <b>${rw.costo.toLocaleString("es")} puntos</b> y te quedarían ${(state.points - rw.costo).toLocaleString("es")}.</p>
+          <div class="btn-stack">
+            <button class="btn" data-action="confirm-redeem" data-reward="${rw.id}">Confirmar canje</button>
+            <button class="btn btn--ghost" data-action="close-sheet">Ahora no</button>
+          </div>`);
+        break;
+      }
+      case "confirm-redeem": {
+        const rw = PREM.rewards.find((x) => x.id === el.dataset.reward);
+        if (!rw || state.points < rw.costo) { closeSheet(); break; }
+        closeSheet();
+        milestone("reward_redeemed", { reward: rw.id, costo: rw.costo });
+        state._ptsFrom = state.points;
         state.points -= rw.costo;
         state.redemptions.unshift({ titulo: rw.titulo, costo: rw.costo, fecha: "Ahora" });
+        buzz();
         toast("Canjeaste: " + rw.titulo);
         go("premium");
+        break;
+      }
+
+      case "ask-revoke": {
+        const g = state.grants.find((x) => x.id === el.dataset.grant);
+        if (!g) break;
+        openSheet(`
+          <h2 class="title">¿Revocar el acceso de ${esc(g.solicitante)}?</h2>
+          <p class="muted" style="margin-bottom:16px">Deja de ver los campos que le compartiste. Podés reactivarlo cuando quieras desde esta misma pantalla.</p>
+          <div class="btn-stack">
+            <button class="btn btn--danger" data-action="confirm-revoke" data-grant="${esc(g.id)}">Sí, revocar acceso</button>
+            <button class="btn btn--ghost" data-action="close-sheet">Cancelar</button>
+          </div>`);
+        break;
+      }
+      case "confirm-revoke":
+        closeSheet();
+        buzz();
+        toggleGrant(el.dataset.grant);
+        break;
+
+      case "close-sheet":
+        closeSheet();
+        break;
+
+      case "toggle-theme": {
+        const actual = document.documentElement.dataset.theme ||
+          (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+        const proximo = actual === "dark" ? "light" : "dark";
+        document.documentElement.dataset.theme = proximo;
+        try { localStorage.setItem("cl_theme", proximo); } catch (e) {}
+        go(state.screen); // re-dibuja el ícono sol/luna
+        break;
+      }
+
+      /* ---- Micro-feedback post-reserva ---- */
+      case "fb-score":
+        if (!state._fb) state._fb = { score: 0, tags: [] };
+        state._fb.score = Number(el.dataset.v);
+        refreshFeedbackSheet();
+        break;
+      case "fb-tag": {
+        if (!state._fb) break;
+        const t = el.dataset.t;
+        const i = state._fb.tags.indexOf(t);
+        if (i >= 0) state._fb.tags.splice(i, 1);
+        else state._fb.tags.push(t);
+        refreshFeedbackSheet();
+        break;
+      }
+      case "fb-send": {
+        const fb = state._fb || {};
+        if (!fb.score) break;
+        state.feedbackGiven = true;
+        if (window.CLTrack && window.CLTrack.feedback) window.CLTrack.feedback(fb.score, "reserva", fb.tags);
+        closeSheet();
+        buzz();
+        toast("¡Gracias por tu opinión! 💙");
         break;
       }
 
@@ -1793,6 +2596,7 @@
     if (!g) return;
     g.activo = !g.activo;
     if (!g.activo) g.duracion = "Revocado hace instantes";
+    milestone(g.activo ? "grant_reactivated" : "grant_revoked", { grant: g.id });
     toast(g.activo ? "Acceso reactivado" : "Acceso revocado");
     go("permisos");
   }
@@ -1827,6 +2631,8 @@
     });
     state.appLogged[a.id] = true;
     state.ssoDraft = null;
+    milestone("sso_granted", { app: a.id, fields_count: keys.length, fields: keys });
+    buzz();
     toast("Sesión iniciada con ContextLayer ✓");
     go("thirdApp");
   }
@@ -1866,11 +2672,11 @@
       const b = document.querySelector(".mic-btn");
       if (b) b.classList.remove("is-listening");
     };
-    recog.onerror = () => { stop(); toast("No se pudo activar el micrófono"); };
+    recog.onerror = () => { stop(); track("voice_error"); toast("No se pudo activar el micrófono"); };
     recog.onend = () => {
       stop();
       const val = input ? input.value.trim() : "";
-      if (val) chatSend(val);
+      if (val) chatSend(val, "voice");
     };
     try { recog.start(); } catch (e) { stop(); }
   }
@@ -1883,6 +2689,96 @@
 
 
 
+  /* ---------- Modo preview (iframes del dashboard /admin) ---------- */
+  // /mvp/?preview=<pantalla>[&app=<appId>][&type=stay|tour] renderiza esa
+  // pantalla con datos demo, congelada (sin timers ni tracking), y le avisa
+  // al padre las dimensiones para superponer heatmaps y el replay.
+  function applyPreviewFixtures(scr, app, type) {
+    if (type === "stay" || type === "tour") state.searchType = type;
+    if (scr === "thirdApp" || scr === "sso") {
+      state.currentAppId = appById(app) ? app : "app-airbnb";
+      if (scr === "sso") state.ssoDraft = null;
+    }
+    if (scr === "reservaOk") state.selectedOptionId = "opt-1";
+    if (scr === "editDom") state._editDomId = "preferencias";
+    if (scr === "onboarding") state.onboardingStep = 1;
+    if (scr === "chatload") {
+      state.guideStep = 1;
+      state.chatDone = false;
+      state.guidedComplete = false;
+      state.chat = [
+        { role: "agent", text: "¡Hola! Soy tu agente. Te hago unas preguntas rápidas para armar tu contexto." },
+        { role: "agent", text: GUIDE[0].q },
+        { role: "user", text: "Valentina" },
+        { role: "agent", text: GUIDE[1].q },
+      ];
+    }
+  }
+
+  function postPreviewReady() {
+    requestAnimationFrame(() => {
+      try {
+        parent.postMessage({
+          cl: "preview-ready",
+          screen: state.screen,
+          docH: screenEl.scrollHeight,
+          screenTop: screenEl.getBoundingClientRect().top + window.scrollY,
+          deviceW: document.querySelector(".device").clientWidth,
+          docTotal: document.documentElement.scrollHeight,
+        }, "*");
+      } catch (e) {}
+    });
+  }
+
+  function bootPreview(scr, qs) {
+    state._preview = true;
+    document.body.classList.add("preview-mode");
+    loadDemoUser();
+    state.onboarded = true;
+    applyPreviewFixtures(scr, qs.get("app"), qs.get("type"));
+    state.screen = screens[scr] ? scr : "pasaporte";
+    render();
+    postPreviewReady();
+    window.addEventListener("message", (e) => {
+      const d = e.data || {};
+      if (d.cl === "preview-go" && screens[d.screen]) {
+        applyPreviewFixtures(d.screen, d.app, d.type);
+        state.screen = d.screen;
+        render();
+        postPreviewReady();
+      }
+    });
+  }
+
   /* ---------- Arranque ---------- */
-  render();
+  (function boot() {
+    // Íconos SVG de la tabbar (reemplazan los emojis del HTML estático).
+    const TAB_ICONS = { pasaporte: "idcard", reservas: "bell", actividad: "receipt", permisos: "lock" };
+    tabbar.querySelectorAll(".tabbar__btn").forEach((b) => {
+      const ic = b.querySelector(".tabbar__ico");
+      if (ic && window.icon) ic.innerHTML = icon(TAB_ICONS[b.dataset.nav] || "sparkles");
+    });
+
+    const qs = new URLSearchParams(location.search);
+    const previewScreen = qs.get("preview");
+    if (previewScreen) return bootPreview(previewScreen, qs);
+    if (qs.get("reset") === "1") {
+      // Limpieza entre testers: /mvp/?reset=1
+      clearSavedState();
+      qs.delete("reset");
+      const q = qs.toString();
+      history.replaceState(null, "", location.pathname + (q ? "?" + q : "") + location.hash);
+    } else {
+      loadState();
+    }
+    history.scrollRestoration = "manual";
+    const inicial = resolveRoute(location.hash);
+    state.screen = inicial;
+    history.replaceState({ idx: 0, epoch: NAV_EPOCH }, "", routeFor(inicial));
+    scrollMem[0] = { route: routeFor(inicial), top: 0 };
+    render();
+    document.dispatchEvent(new CustomEvent("cl:nav", {
+      detail: { screen: inicial, prev: null, dir: "none" },
+    }));
+  })();
 })();
