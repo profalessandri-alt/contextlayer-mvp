@@ -118,10 +118,23 @@ returns json language sql stable as $$
   )
 $$;
 
+-- Nota de semántica: el tracker registra cada screen_view ANTES de actualizar
+-- su pantalla actual, así que `screen` y props->>'prev' son ambos la pantalla
+-- que se DEJA. El destino real es el `screen` del siguiente screen_view de la
+-- misma sesión (lead sobre seq).
 create or replace function public.stats_flows(p_from timestamptz, p_to timestamptz)
 returns table (from_screen text, to_screen text, n bigint) language sql stable as $$
-  select props->>'prev', screen, count(*)
-  from public.events
-  where type = 'screen_view' and received_at between p_from and p_to
+  with sv as (
+    select session_id, seq, coalesce(screen, '(inicio)') as s
+    from public.events
+    where type = 'screen_view' and received_at between p_from and p_to
+  ), pares as (
+    select s as from_screen,
+           lead(s) over (partition by session_id order by seq) as to_screen
+    from sv
+  )
+  select from_screen, to_screen, count(*)
+  from pares
+  where to_screen is not null
   group by 1, 2 order by 3 desc
 $$;

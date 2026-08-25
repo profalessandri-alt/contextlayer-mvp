@@ -158,6 +158,8 @@
     state.param = parts[1] ? decodeURIComponent(parts[1]) : null;
   }
 
+  let routeToken = 0;
+
   async function route() {
     parseHash();
     markNav();
@@ -166,11 +168,14 @@
     const view = VIEWS[state.route];
     state.current = view;
     el.innerHTML = '<div class="loading">Cargando datos…</div>';
+    const miToken = ++routeToken; // si hay otra navegación durante el await, esta se descarta
 
     let data;
     try {
       data = await Provider.all(state.range);
+      if (miToken !== routeToken) return;
     } catch (err) {
+      if (miToken !== routeToken) return;
       if (err.message === "SIN_SESION") { showLogin("Tu sesión venció. Entrá de nuevo."); return; }
       el.innerHTML = `<div class="banner banner--warn" style="margin:0">💥 No se pudieron cargar los datos: ${esc(err.message)}</div>`;
       return;

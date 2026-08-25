@@ -70,7 +70,9 @@
     const from = rangeFrom(rangeKey);
     const iso = from ? from.toISOString() : null;
     const sParams = { order: "started_at.asc" };
-    const eParams = { order: "ts.asc" };
+    // Orden TOTAL (ts tiene empates sistemáticos): sin id como desempate, la
+    // paginación por offset puede duplicar/perder filas entre páginas.
+    const eParams = { order: "ts.asc,id.asc" };
     const fParams = { order: "created_at.desc" };
     if (iso) {
       sParams.started_at = "gte." + iso;   // sesiones por started_at

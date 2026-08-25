@@ -71,7 +71,8 @@
       : /mac os/i.test(ua) ? "macOS"
       : /linux/i.test(ua) ? "Linux" : "otro";
     const m =
-      ua.match(/(edg|opr|firefox|chrome|safari)\/([\d.]+)/i) ||
+      ua.match(/(edg|opr|firefox)\/([\d.]+)/i) ||
+      ua.match(/(chrome|safari)\/([\d.]+)/i) ||
       ua.match(/(safari)/i) || [];
     const names = { edg: "Edge", opr: "Opera", firefox: "Firefox", chrome: "Chrome", safari: "Safari" };
     const browser = (names[(m[1] || "").toLowerCase()] || "otro") + (m[2] ? " " + m[2].split(".")[0] : "");
@@ -110,8 +111,8 @@
       browser: cut(u.browser, 40),
       os: cut(u.os, 40),
       device_type: u.device_type,
-      viewport_w: innerWidth,
-      viewport_h: innerHeight,
+      viewport_w: Math.max(0, Math.min(innerWidth, 10000)),
+      viewport_h: Math.max(0, Math.min(innerHeight, 10000)),
       dpr: devicePixelRatio || 1,
       lang: cut(navigator.language, 20),
       referrer: cut(document.referrer, 300) || null,
@@ -169,8 +170,12 @@
 
   function flush(final) {
     if (T.mode !== "remote" || !T.queue.length) return;
+    // Un solo POST en vuelo por vez (el flush final al cerrar puede solaparse:
+    // el dedupe por (session_id, seq) del upsert lo hace inocuo).
+    if (T.inflight && !final) return;
     if (!final && now() < T.failUntil) { scheduleFlush(T.failUntil - now() + 100); return; }
     const batch = T.queue.slice(0, BATCH_MAX);
+    T.inflight = true;
     const req = fetch(T.url + "/rest/v1/events?on_conflict=session_id,seq", {
       method: "POST",
       // keepalive solo al cerrar (límite 64 KB): los batches normales no lo necesitan.
@@ -184,8 +189,12 @@
       body: JSON.stringify(batch),
     });
     req.then((r) => {
+      T.inflight = false;
       if (r.ok || r.status === 409) {
-        T.queue.splice(0, batch.length);
+        // Remover EXACTAMENTE lo enviado (por identidad, no por posición):
+        // mientras el POST volaba pudieron encolarse eventos nuevos.
+        const enviados = new Set(batch.map((e) => e.session_id + "/" + e.seq));
+        T.queue = T.queue.filter((e) => !enviados.has(e.session_id + "/" + e.seq));
         T.fails = 0;
         T.failUntil = 0;
         persistQueue();
@@ -193,7 +202,7 @@
       } else {
         fail();
       }
-    }).catch(fail);
+    }).catch((e) => { T.inflight = false; fail(); });
   }
   function fail() {
     T.fails = Math.min(T.fails + 1, 6);
@@ -205,6 +214,8 @@
   function record(type, props, coords) {
     if (T.mode === "off") return;
     lsSet(LS.sidAt, String(now()));
+    // Otra pestaña pudo avanzar la secuencia: resincronizar antes de asignar.
+    T.seq = Math.max(T.seq, Number(lsGet(LS.seq) || 0));
     const e = {
       session_id: T.sid,
       seq: T.seq++,
@@ -275,11 +286,14 @@
       DATASET_OK.forEach((k) => {
         if (interactiveEl.dataset && interactiveEl.dataset[k] != null) props[k] = cut(interactiveEl.dataset[k], 60);
       });
-      // El texto del elemento ayuda a leer el ranking; nunca en el chat
-      // (los chips son valores del contexto) ni en botones que interpolan
-      // datos del tester (ej. "Continuar como {nombre}").
+      // El texto del elemento ayuda a leer el ranking, pero SOLO de <button>/<a>
+      // (los inputs/textarea/cards pueden contener datos del tester), nunca en
+      // el chat (los chips son valores del contexto) ni en botones que
+      // interpolan datos (ej. "Continuar como {nombre}").
       const LABEL_DENY = ["resume", "edit-summary", "save-summary"];
-      if (T.screen !== "chatload" && LABEL_DENY.indexOf(interactiveEl.dataset && interactiveEl.dataset.action) === -1) {
+      const esBotton = interactiveEl.tagName === "BUTTON" || interactiveEl.tagName === "A";
+      if (esBotton && T.screen !== "chatload" &&
+          LABEL_DENY.indexOf(interactiveEl.dataset && interactiveEl.dataset.action) === -1) {
         const label = (interactiveEl.textContent || "").trim().replace(/\s+/g, " ");
         if (label) props.label = cut(label, 40);
       }

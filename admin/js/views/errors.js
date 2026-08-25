@@ -28,7 +28,7 @@
       const rows = errs.map((er) => `
         <tr>
           <td style="max-width:420px"><b class="dim" style="overflow-wrap:anywhere">${esc(er.msg)}</b>
-            ${er.src ? `<div class="muted">${esc(er.src)}${er.line ? ":" + er.line : ""}</div>` : ""}</td>
+            ${er.src ? `<div class="muted">${esc(er.src)}${er.line != null && er.line !== "" ? ":" + esc(er.line) : ""}</div>` : ""}</td>
           <td class="num"><b>${er.count}</b></td>
           <td class="num">${er.sessions}</td>
           <td>${er.screens.length ? er.screens.map((s) => `<span class="chip">${esc(s)}</span>`).join(" ") : '<span class="muted">—</span>'}</td>

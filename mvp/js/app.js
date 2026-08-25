@@ -304,6 +304,7 @@
     "narrativeEdited", "appLogged", "pedido", "searchType", "chat", "chatDone",
     "guideStep", "guidedComplete", "currentAppId", "_editDomId",
     "selectedOptionId", "openListingId", "perspective", "feedbackGiven",
+    "onboardingStep",
   ];
 
   function saveState() {
@@ -386,6 +387,11 @@
         if (!state.passport.some((d) => d.id === arg)) return "contexto";
         state._editDomId = arg;
         break;
+      case "onboarding":
+        // Deep link / refresh a mitad del formulario: retomar el paso guardado.
+        state.onboardingStep = Math.min(state.onboardingStep || 0, state.passport.length - 1);
+        defaultSelects(state.passport[state.onboardingStep]);
+        break;
       case "thirdApp":
         state.currentAppId = appById(arg) ? arg : null;
         break;
@@ -407,6 +413,7 @@
 
   let navIdx = 0;                // índice de la entrada actual del historial
   const scrollMem = {};          // idx → { route, top } para restaurar scroll
+  const NAV_EPOCH = Date.now();  // identifica este arranque (ver popstate)
 
   function navigate(screen, opts = {}) {
     const desde = state.screen;
@@ -433,7 +440,7 @@
     // Misma pantalla con otro parámetro (ej. volver al selector de apps):
     // actualizar la ruta in place, sin apilar historia.
     if (mismo && !opts.pop && scrollMem[navIdx] && scrollMem[navIdx].route !== route) {
-      history.replaceState({ idx: navIdx }, "", route);
+      history.replaceState({ idx: navIdx, epoch: NAV_EPOCH }, "", route);
       scrollMem[navIdx].route = route;
     }
 
@@ -442,18 +449,28 @@
       // Saltar entre tabs reemplaza la entrada: el historial no acumula tabs.
       const entreTabs = NAV[desde] && NAV[desde].tab != null && NAV[screen] && NAV[screen].tab != null;
       if (opts.replace || entreTabs) {
-        history.replaceState({ idx: navIdx }, "", route);
+        history.replaceState({ idx: navIdx, epoch: NAV_EPOCH }, "", route);
         scrollMem[navIdx] = { route, top: 0 };
       } else {
         navIdx++;
-        history.pushState({ idx: navIdx }, "", route);
+        history.pushState({ idx: navIdx, epoch: NAV_EPOCH }, "", route);
         scrollMem[navIdx] = { route, top: 0 };
         Object.keys(scrollMem).forEach((k) => { if (+k > navIdx) delete scrollMem[k]; });
       }
     }
 
     render();
-    if (!mismo) screenEl.scrollTop = (opts.pop && scrollMem[navIdx] && scrollMem[navIdx].top) || 0;
+    if (!mismo) {
+      screenEl.scrollTop = (opts.pop && scrollMem[navIdx] && scrollMem[navIdx].top) || 0;
+      // El fantasma es absolute respecto del contenido: si restauramos scroll,
+      // anclarlo al viewport actual para que la transición se vea bien.
+      const g = screenEl.querySelector(".screen__ghost");
+      if (g && screenEl.scrollTop) {
+        g.style.top = screenEl.scrollTop + "px";
+        g.style.bottom = "auto";
+        g.style.height = screenEl.clientHeight + "px";
+      }
+    }
     if (!mismo) {
       document.dispatchEvent(new CustomEvent("cl:nav", {
         detail: { screen, prev: desde, dir: state._navDir },
@@ -466,12 +483,16 @@
 
   window.addEventListener("popstate", (e) => {
     if (scrollMem[navIdx]) scrollMem[navIdx].top = screenEl.scrollTop;
+    // Entrada creada antes del último reload: sus idx no se corresponden con
+    // el scrollMem de este arranque → descartarlo entero (pierde solo la
+    // restauración de scroll, nunca navega mal).
+    if (!e.state || e.state.epoch !== NAV_EPOCH) {
+      Object.keys(scrollMem).forEach((k) => delete scrollMem[k]);
+    }
     navIdx = (e.state && e.state.idx) || 0;
     const destino = resolveRoute(location.hash);
     const route = routeFor(destino);
-    // Normalizar la URL si la ruta pedida redirigió (ej. #/thinking → agente)
-    // o si el hash fue editado a mano.
-    if (location.hash !== route) history.replaceState({ idx: navIdx }, "", route);
+    history.replaceState({ idx: navIdx, epoch: NAV_EPOCH }, "", route);
     if (!scrollMem[navIdx]) scrollMem[navIdx] = { route, top: 0 };
     navigate(destino, { pop: true });
   });
@@ -1566,11 +1587,13 @@
 
     const estabaCompleto = state.guidedComplete;
     const antes = state.chat.length;
+    let huboCambios = false;
     if (state.guideStep < GUIDE.length) {
       guidedTurn(clean);
     } else {
       // Modo libre, una vez completado el guiado.
       const ups = parseContext(clean);
+      huboCambios = ups.length > 0;
       if (ups.length) {
         state.chat.push({ role: "agent", text: "Listo, lo actualicé:", chips: ups.map((u) => u.label + ": " + u.valor) });
       } else {
@@ -1582,7 +1605,7 @@
     const respuestas = state.chat.splice(antes);
     if (reducedMotion()) {
       respuestas.forEach((r) => state.chat.push(r));
-      chatAfterReply(estabaCompleto);
+      chatAfterReply(estabaCompleto, huboCambios);
       return true;
     }
     state.chat.push({ role: "agent", typing: true });
@@ -1593,7 +1616,7 @@
       const ultimo = state.chat[state.chat.length - 1];
       if (ultimo && ultimo.typing) state.chat.pop(); // saca el typing (si el chat no fue reiniciado)
       respuestas.forEach((r) => state.chat.push(r));
-      chatAfterReply(estabaCompleto);
+      chatAfterReply(estabaCompleto, huboCambios);
       saveSoon();
     }, 480 + Math.random() * 420);
     return true;
@@ -1609,8 +1632,9 @@
 
   // Cuando el guiado termina hay que re-renderizar la pantalla completa
   // (aparecen el resumen y los botones); si no, alcanza con el área del chat.
-  function chatAfterReply(estabaCompleto) {
-    if (state.guidedComplete && !estabaCompleto && state.screen === "chatload") render();
+  function chatAfterReply(estabaCompleto, huboCambios) {
+    if (state.screen !== "chatload") return; // el tester ya se fue del chat
+    if (state.guidedComplete && (!estabaCompleto || huboCambios)) render();
     else renderChatArea();
     scrollChatBottom();
   }
@@ -1749,10 +1773,10 @@
         const opts = ['<option value="">Elegí…</option>']
           .concat(f.opciones.map((o) => `<option value="${esc(o)}" ${o === f.valor ? "selected" : ""}>${esc(o)}</option>`))
           .join("");
-        control = `<select id="sum-input" data-key="${esc(key)}">${opts}</select>`;
+        control = `<select id="sum-input">${opts}</select>`;
       } else {
         const type = f && f.tipo === "number" ? "number" : "text";
-        control = `<input id="sum-input" data-key="${esc(key)}" type="${type}" value="${esc(f ? f.valor : "")}" placeholder="${esc(fieldLabel(key))}" />`;
+        control = `<input id="sum-input" type="${type}" value="${esc(f ? f.valor : "")}" placeholder="${esc(fieldLabel(key))}" />`;
       }
       return `<div class="sum-edit">
         <div class="grow">${control}</div>
@@ -2045,7 +2069,7 @@
       if (el.type === "checkbox") return; // los toggles se manejan aparte
       el.addEventListener("change", () => {
         const f = findField(el.dataset.key);
-        if (f) f.valor = el.type === "number" ? Number(el.value) : el.value;
+        if (f) f.valor = el.type === "number" ? (el.value === "" ? "" : Number(el.value)) : el.value;
       });
     });
   }
@@ -2679,7 +2703,7 @@
     if (scr === "editDom") state._editDomId = "preferencias";
     if (scr === "onboarding") state.onboardingStep = 1;
     if (scr === "chatload") {
-      state.guideStep = 2;
+      state.guideStep = 1;
       state.chatDone = false;
       state.guidedComplete = false;
       state.chat = [
@@ -2750,7 +2774,7 @@
     history.scrollRestoration = "manual";
     const inicial = resolveRoute(location.hash);
     state.screen = inicial;
-    history.replaceState({ idx: 0 }, "", routeFor(inicial));
+    history.replaceState({ idx: 0, epoch: NAV_EPOCH }, "", routeFor(inicial));
     scrollMem[0] = { route: routeFor(inicial), top: 0 };
     render();
     document.dispatchEvent(new CustomEvent("cl:nav", {

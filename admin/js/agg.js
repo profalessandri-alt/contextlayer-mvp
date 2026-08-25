@@ -191,13 +191,20 @@
     { label: "Se suscribió", test: (e) => isMile(e, "premium_subscribed") },
   ];
 
-  // Sub-funnel de onboarding filtrado por modo (chat|form).
+  // Sub-funnel de onboarding filtrado por modo (chat|form). Los pasos 3-4 se
+  // cuentan SOLO dentro de la cohorte que inició el onboarding en ese modo
+  // (si no, las sesiones del otro modo o del camino demo inflan ambos).
   function funnelOnboarding(sessions, events, mode) {
+    const cohorte = new Set();
+    events.forEach((e) => {
+      if (isMile(e, "onboarding_start") && p(e).mode === mode) cohorte.add(e.session_id);
+    });
+    const enCohorte = (e) => cohorte.has(e.session_id);
     return funnel(sessions, events, [
       { label: "Inició (" + mode + ")", test: (e) => isMile(e, "onboarding_start") && p(e).mode === mode },
-      { label: "Completó", test: (e) => isMile(e, "onboarding_complete") && p(e).mode === mode },
-      { label: "Buscó con Aria", test: (e) => isMile(e, "search_run") },
-      { label: "Reservó", test: (e) => isMile(e, "booking_confirmed") },
+      { label: "Completó", test: (e) => enCohorte(e) && isMile(e, "onboarding_complete") && p(e).mode === mode },
+      { label: "Buscó con Aria", test: (e) => enCohorte(e) && isMile(e, "search_run") },
+      { label: "Reservó", test: (e) => enCohorte(e) && isMile(e, "booking_confirmed") },
     ]);
   }
 

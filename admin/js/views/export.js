@@ -61,14 +61,18 @@
             </div>`).join("")}
         </div>`;
 
-      el.addEventListener("click", (e) => {
+      // #view es un nodo persistente: sacar el handler del render anterior
+      // para no descargar archivos duplicados (y con datos viejos).
+      if (el._expHandler) el.removeEventListener("click", el._expHandler);
+      el._expHandler = (e) => {
         const b = e.target.closest("[data-set]");
         if (!b || b.disabled) return;
         const set = sets.find((s) => s.key === b.dataset.set);
         const base = "contextlayer-" + set.key + "-" + ctx.range + "-" + stamp;
         if (b.dataset.fmt === "csv") download(base + ".csv", "text/csv", toCSV(set.rows));
         else download(base + ".json", "application/json", JSON.stringify(set.rows, null, 2));
-      });
+      };
+      el.addEventListener("click", el._expHandler);
     },
   };
 })();
