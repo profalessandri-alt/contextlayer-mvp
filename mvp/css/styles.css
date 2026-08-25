@@ -53,7 +53,6 @@ body {
   flex-direction: column;
   padding-top: env(safe-area-inset-top);
 }
-.device__notch { display: none; }
 
 /* En pantallas grandes: panel centrado (sin marco de teléfono) */
 @media (min-width: 640px) {
@@ -74,15 +73,11 @@ body {
   }
 }
 
-/* Barra de estado simulada: oculta (se usa la del propio dispositivo) */
-.statusbar { display: none; }
-
 /* ---------- Contenedor de pantalla ---------- */
 .screen {
   flex: 1;
   overflow-y: auto;
   padding: var(--pad) var(--pad) 26px;
-  scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
 }
 .screen::-webkit-scrollbar { width: 0; }
@@ -277,6 +272,9 @@ h2.title { font-size: 1.25rem; margin: 4px 0 6px; }
 .progress__dot.is-done { background: var(--brand-2); }
 .progress__dot.is-active { background: var(--brand); }
 
+/* Fecha/hora chiquita en recibos y canjes */
+.log__date { font-size: 0.72rem; color: var(--brand-2); font-weight: 700; }
+
 /* ---------- Context category list ---------- */
 .ctx-item {
   display: flex; align-items: center; gap: 12px;
@@ -286,15 +284,6 @@ h2.title { font-size: 1.25rem; margin: 4px 0 6px; }
 .ctx-item:last-child { border-bottom: none; }
 .ctx-item__val { color: var(--txt-dim); font-size: 0.85rem; }
 
-/* ---------- Permission access log ---------- */
-.log {
-  border-left: 2px solid var(--line);
-  margin: 10px 0 2px;
-  padding-left: 12px;
-}
-.log__entry { margin-bottom: 8px; }
-.log__date { font-size: 0.72rem; color: var(--brand-2); font-weight: 700; }
-.log__detail { font-size: 0.82rem; color: var(--txt-dim); }
 
 /* ---------- Option (result) card ---------- */
 .opt__top { display: flex; justify-content: space-between; gap: 10px; }
@@ -377,45 +366,6 @@ h2.title { font-size: 1.25rem; margin: 4px 0 6px; }
 .tabbar__btn.is-active { color: var(--brand-2); }
 .tabbar__btn.is-active .tabbar__ico { filter: none; }
 
-/* ---------- Perspective switch (fuera del teléfono) ---------- */
-.perspective {
-  display: flex; align-items: center; gap: 8px;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.08);
-  padding: 7px 10px; border-radius: 999px;
-  font-size: 0.8rem;
-}
-.perspective__lbl { color: var(--txt-mute); }
-.perspective__btn {
-  background: transparent; border: none; cursor: pointer;
-  color: var(--txt-dim); font-weight: 600;
-  padding: 6px 12px; border-radius: 999px; font-size: 0.8rem;
-}
-.perspective__btn.is-active { background: var(--brand-grad); color: #fff; }
-
-/* ---------- Provider inbox ---------- */
-.inbox-item {
-  display: flex; gap: 12px; align-items: flex-start;
-  padding: 14px 0; border-bottom: 1px solid var(--line);
-}
-.inbox-item:last-child { border-bottom: none; }
-.dot-status { width: 9px; height: 9px; border-radius: 50%; flex: none; margin-top: 5px; }
-.dot-status--new { background: var(--brand-2); box-shadow: 0 0 0 4px rgba(87,230,201,0.15); }
-.dot-status--ok { background: var(--txt-mute); }
-
-/* ---------- B2B compare ---------- */
-.b2b-pros { list-style: none; margin-top: 8px; }
-.b2b-pros li { font-size: 0.82rem; color: var(--txt-dim); margin-bottom: 5px; display: flex; gap: 7px; }
-.b2b-pros li.pro::before { content: "＋"; color: var(--ok); font-weight: 800; }
-.b2b-pros li.con::before { content: "－"; color: var(--danger); font-weight: 800; }
-.vote-note {
-  background: rgba(124,140,255,0.12);
-  border: 1px dashed var(--brand);
-  border-radius: 12px; padding: 12px 14px;
-  font-size: 0.82rem; color: var(--txt-dim);
-  margin-top: 6px;
-}
-
 /* ---------- Toast ---------- */
 .toast {
   position: absolute;
@@ -440,26 +390,6 @@ h2.title { font-size: 1.25rem; margin: 4px 0 6px; }
 /* ============================================================================
  * Añadidos v2 — modelo pasaporte (solicitudes, recibos, alcance por campo)
  * ==========================================================================*/
-
-/* Badge de conteo en el tab de Solicitudes */
-.tabbar__btn { position: relative; }
-.tab-badge {
-  position: absolute;
-  top: 4px;
-  right: calc(50% - 26px);
-  min-width: 17px;
-  height: 17px;
-  padding: 0 5px;
-  border-radius: 999px;
-  background: var(--danger);
-  color: #fff;
-  font-size: 0.62rem;
-  font-weight: 800;
-  display: grid;
-  place-items: center;
-  line-height: 1;
-}
-.tab-badge[hidden] { display: none; }
 
 /* Etiqueta de tipo de solicitante (agente / OTA / comercio) */
 .pill {
@@ -533,11 +463,6 @@ h2.title { font-size: 1.25rem; margin: 4px 0 6px; }
   border-bottom: 1px solid var(--line);
 }
 .receipt:last-child { border-bottom: none; }
-.receipt__ico {
-  width: 34px; height: 34px; border-radius: 9px; flex: none;
-  display: grid; place-items: center; font-size: 1rem;
-  background: var(--surface-2);
-}
 .receipt__tag {
   font-size: 0.64rem; font-weight: 800; text-transform: uppercase;
   letter-spacing: 0.5px; padding: 2px 7px; border-radius: 999px;
@@ -649,18 +574,6 @@ h2.title { font-size: 1.25rem; margin: 4px 0 6px; }
 }
 .appframe__dot { width: 9px; height: 9px; border-radius: 50%; background: #c7cde0; }
 .appframe__url { flex: 1; text-align: center; opacity: 0.8; }
-
-.thirdapp-hero {
-  padding: 26px 18px;
-  text-align: center;
-  color: #fff;
-}
-.thirdapp-logo {
-  width: 58px; height: 58px; border-radius: 16px;
-  display: grid; place-items: center; font-size: 1.9rem;
-  margin: 0 auto 12px;
-  background: rgba(255,255,255,0.15);
-}
 
 /* Botón "Continuar con ContextLayer" */
 .btn-ctxlayer {

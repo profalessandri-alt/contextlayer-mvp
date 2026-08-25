@@ -72,6 +72,15 @@
   const findOffer = (id) =>
     D.opciones.find((o) => o.id === id) || D.tours.find((o) => o.id === id) || null;
 
+  // Al armar por formulario, los select vacíos toman su primera opción por
+  // defecto (se aplica al entrar a cada paso, nunca durante el render).
+  function defaultSelects(dom) {
+    if (!dom) return;
+    dom.campos.forEach((f) => {
+      if (f.tipo === "select" && (f.valor === "" || f.valor == null)) f.valor = f.opciones[0];
+    });
+  }
+
   // Pasaporte vacío (para armarlo desde cero) vs. de ejemplo (demo).
   function emptyPassportData() {
     const p = JSON.parse(JSON.stringify(D.passport));
@@ -126,12 +135,6 @@
     { key: "stay.budget.max", q: "¿Cuál es tu presupuesto máximo por noche en USD?" },
     { key: "stay.activities", q: "Por último, ¿qué actividades disfrutás? Enoturismo, aventura, cultural o gastronómico." },
   ];
-  function setPerspectiveButtons(p) {
-    document.querySelectorAll(".perspective__btn").forEach((b) =>
-      b.classList.toggle("is-active", b.dataset.persp === p)
-    );
-  }
-
   /* ---- Helpers de pasaporte (keys punteadas) ---- */
   function findField(key) {
     for (const dom of state.passport) {
@@ -152,9 +155,11 @@
   const USER_TABS = ["pasaporte", "reservas", "actividad", "permisos"];
 
   function go(screen) {
+    const mismo = screen === state.screen;
     state.screen = screen;
     render();
-    screenEl.scrollTop = 0;
+    // Re-render de la misma pantalla (ej. elegir plan): el scroll no salta.
+    if (!mismo) screenEl.scrollTop = 0;
   }
 
   function view(html) {
@@ -231,10 +236,6 @@
     const doms = state.passport;
     const i = state.onboardingStep;
     const dom = doms[i];
-    // Al armar por formulario, los select vacíos toman su primera opción por defecto.
-    dom.campos.forEach((f) => {
-      if (f.tipo === "select" && (f.valor === "" || f.valor == null)) f.valor = f.opciones[0];
-    });
     const dots = doms
       .map((_, idx) => {
         const cls = idx < i ? "is-done" : idx === i ? "is-active" : "";
@@ -706,10 +707,15 @@
         </div>
       </div>
     `);
+    // Token de esta corrida: si el usuario navega antes de terminar, no lo
+    // teletransportamos a resultados.
+    const run = (state._thinkingRun = {});
     setTimeout(() => {
       const els = node.querySelectorAll(".thinking__step");
       els.forEach((el, idx) => setTimeout(() => el.classList.add("show"), idx * 550));
-      setTimeout(() => go("resultados"), els.length * 550 + 700);
+      setTimeout(() => {
+        if (state._thinkingRun === run && state.screen === "thinking") go("resultados");
+      }, els.length * 550 + 700);
     }, 30);
     return node;
   };
@@ -1458,6 +1464,16 @@
     if (actEl) handleAction(actEl.dataset.action, actEl);
   });
 
+  // Las cards con role="button" también responden a Enter/Espacio.
+  screenEl.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    if (e.target.matches("input, select, textarea, button, a")) return;
+    const el = e.target.closest('[role="button"]');
+    if (!el) return;
+    e.preventDefault();
+    el.click();
+  });
+
   screenEl.addEventListener("change", (e) => {
     const t = e.target;
     if (t.id === "narrative-input") {
@@ -1480,6 +1496,7 @@
       case "start-onboarding":
         resetEmptyUser();
         state.onboardingStep = 0;
+        defaultSelects(state.passport[0]);
         go("onboarding");
         break;
       case "load-demo":
@@ -1491,6 +1508,7 @@
       case "onboarding-next":
         if (state.onboardingStep < state.passport.length - 1) {
           state.onboardingStep++;
+          defaultSelects(state.passport[state.onboardingStep]);
           go("onboarding");
         } else {
           state.onboarded = true;
@@ -1670,14 +1688,12 @@
         state.openListingId = o.id;
         state.currentAppId = o.sourceAppId;
         state.perspective = "app";
-        setPerspectiveButtons("app");
         go("thirdApp");
         break;
       }
       case "back-to-results":
         state.openListingId = null;
         state.perspective = "user";
-        setPerspectiveButtons("user");
         go("resultados");
         break;
       case "finish-booking": {
@@ -1692,12 +1708,12 @@
             detalle: (o.esTour ? "Experiencia confirmada: " : "Reserva confirmada: ") + o.nombre,
             fields: a.fields,
           });
-          // Puntos premium por esta reserva
-          const totalBase = o.esTour ? o.precio : o.precioNoche * 3;
-          const ganados = isPremium() ? pointsFor(premiumPrice(totalBase)) : 0;
-          if (ganados) state.points += ganados;
-          // Registrar en "Mis reservas" como "en curso"
+          // Registrar en "Mis reservas" como "en curso". Los puntos premium se
+          // suman solo si la reserva es nueva (evita duplicar re-reservando).
           if (!state.reservas.some((r) => r.optId === o.id)) {
+            const totalBase = o.esTour ? o.precio : o.precioNoche * 3;
+            const ganados = isPremium() ? pointsFor(premiumPrice(totalBase)) : 0;
+            if (ganados) state.points += ganados;
             state.reservas.unshift(
               o.esTour
                 ? {
@@ -1738,17 +1754,14 @@
       }
       case "go-user-permisos":
         state.perspective = "user";
-        setPerspectiveButtons("user");
         go("permisos");
         break;
       case "go-user-reservas":
         state.perspective = "user";
-        setPerspectiveButtons("user");
         go("reservas");
         break;
       case "go-user-home":
         state.perspective = "user";
-        setPerspectiveButtons("user");
         go("pasaporte");
         break;
 
@@ -1766,6 +1779,7 @@
         break;
       case "cancel-premium":
         state.premium = false;
+        state.premiumPlan = null;
         toast("Suscripción cancelada");
         go("pasaporte");
         break;
